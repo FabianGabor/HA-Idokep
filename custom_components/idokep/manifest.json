@@ -1,5 +1,5 @@
 {
-  "domain": "integration_blueprint",
+  "domain": "idokep",
   "name": "Integration blueprint",
   "codeowners": [
     "@ludeeus"
