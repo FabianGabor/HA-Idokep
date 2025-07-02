@@ -9,7 +9,7 @@ from typing import Any
 
 import aiohttp
 import async_timeout
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 
 from .const import LOGGER
 
@@ -101,14 +101,29 @@ class IdokepApiClient:
     def _map_condition(self, condition: str) -> str:
         """Map Hungarian condition to Home Assistant standard condition."""
         mapping = {
-            "derült": "clear",
-            "felhős": "cloudy",
+            "napos": "sunny",
+            "derült": "sunny",
             "borult": "cloudy",
-            "eső": "rainy",
+            "erősen felhős": "cloudy",
+            "közepesen felhős": "partlycloudy",
+            "gyengén felhős": "partlycloudy",
+            "zivatar": "lightning-rainy",
             "zápor": "rainy",
-            "hó": "snowy",
+            "szitálás": "rainy",
+            "gyenge eső": "rainy",
+            "eső": "rainy",
+            "eső viharos széllel": "rainy",
             "köd": "fog",
-            # Add more mappings as needed
+            "párás": "fog",
+            "pára": "fog",
+            "villámlás": "lightning",
+            "erős eső": "pouring",
+            "jégeső": "hail",
+            "havazás": "snowy",
+            "hószállingózás": "snowy",
+            "havas eső": "snowy-rainy",
+            "fagyott eső": "snowy-rainy",
+            "szeles": "windy",
         }
         return mapping.get(condition.lower(), "unknown")
 
@@ -137,7 +152,8 @@ class IdokepApiClient:
                 # Weather condition
                 cond_div = soup.find("div", class_="ik current-weather")
                 if cond_div:
-                    data["condition"] = cond_div.text.strip()
+                    condition = cond_div.text.strip()
+                    data["condition"] = self._map_condition(condition)
 
                 # Weather title (e.g., 'Jelenleg')
                 title_div = soup.find("div", class_="ik current-weather-title")
@@ -145,24 +161,30 @@ class IdokepApiClient:
                     data["weather_title"] = title_div.text.strip()
 
                 # Sunrise and sunset (look for divs with img alt="Napkelte" or "Napnyugta")
+                today = datetime.datetime.now().date()
+                local_tz = datetime.datetime.now().astimezone().tzinfo
                 for div in soup.find_all("div"):
-                    img = div.find("img", alt=True)
-                    if img:
-                        if "Napkelte" in img.get("alt", ""):
+                    img = div.find("img") if hasattr(div, "find") else None
+                    if img and isinstance(img, Tag):
+                        alt = img.attrs.get("alt", "")
+                        if "Napkelte" in alt:
                             text = div.get_text(strip=True)
-                            # Extract only the time part
-                            match = re.search(
-                                r"Napkelte\s*([0-9]{1,2}:[0-9]{2})", text
-                            )
+                            match = re.search(r"Napkelte\s*([0-9]{1,2}:[0-9]{2})", text)
                             if match:
-                                data["sunrise"] = match.group(1)
-                        if "Napnyugta" in img.get("alt", ""):
+                                sunrise_time = match.group(1)
+                                hour, minute = map(int, sunrise_time.split(":"))
+                                dt = datetime.datetime.combine(today, datetime.time(hour, minute, tzinfo=local_tz))
+                                data["sunrise"] = dt.isoformat()
+                                LOGGER.debug("Parsed sunrise ISO: %s (type: %s)", data["sunrise"], type(data["sunrise"]))
+                        if "Napnyugta" in alt:
                             text = div.get_text(strip=True)
-                            match = re.search(
-                                r"Napnyugta\s*([0-9]{1,2}:[0-9]{2})", text
-                            )
+                            match = re.search(r"Napnyugta\s*([0-9]{1,2}:[0-9]{2})", text)
                             if match:
-                                data["sunset"] = match.group(1)
+                                sunset_time = match.group(1)
+                                hour, minute = map(int, sunset_time.split(":"))
+                                dt = datetime.datetime.combine(today, datetime.time(hour, minute, tzinfo=local_tz))
+                                data["sunset"] = dt.isoformat()
+                                LOGGER.debug("Parsed sunset ISO: %s (type: %s)", data["sunset"], type(data["sunset"]))
 
                 # Short forecast text (skip divs with img or button)
                 for div in soup.find_all("div", class_="pt-2"):

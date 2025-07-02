@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import TYPE_CHECKING
 
-from homeassistant.components.sensor import SensorEntity, SensorEntityDescription
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorEntityDescription,
+)
 
 from .entity import IdokepEntity
 
@@ -21,7 +26,7 @@ ENTITY_DESCRIPTIONS = (
         name="Current Temperature",
         icon="mdi:thermometer",
         native_unit_of_measurement="°C",
-        device_class="temperature",
+        device_class=SensorDeviceClass.TEMPERATURE,
         state_class="measurement",
     ),
     SensorEntityDescription(
@@ -33,11 +38,13 @@ ENTITY_DESCRIPTIONS = (
         key="sunrise",
         name="Sunrise",
         icon="mdi:weather-sunset-up",
+        device_class=SensorDeviceClass.TIMESTAMP,
     ),
     SensorEntityDescription(
         key="sunset",
         name="Sunset",
         icon="mdi:weather-sunset-down",
+        device_class=SensorDeviceClass.TIMESTAMP,
     ),
     SensorEntityDescription(
         key="short_forecast",
@@ -78,6 +85,15 @@ class IdokepSensor(IdokepEntity, SensorEntity):
         )
 
     @property
-    def native_value(self) -> str | None:
+    def native_value(self) -> str | int | float | datetime | None:
         """Return the native value of the sensor."""
-        return self.coordinator.data.get(self.entity_description.key)
+        value = self.coordinator.data.get(self.entity_description.key)
+        if (
+            self.entity_description.device_class == SensorDeviceClass.TIMESTAMP
+            and isinstance(value, str)
+        ):
+            try:
+                return datetime.fromisoformat(value)
+            except Exception:
+                return None
+        return value
