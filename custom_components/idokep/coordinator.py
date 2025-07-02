@@ -10,6 +10,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .api import (
     IdokepApiClientAuthenticationError,
     IdokepApiClientError,
+    IdokepApiClient,
 )
 
 if TYPE_CHECKING:
@@ -22,11 +23,15 @@ class IdokepDataUpdateCoordinator(DataUpdateCoordinator):
 
     config_entry: IdokepConfigEntry
 
-    async def _async_update_data(self) -> Any:
+    async def _async_update_data(self) -> dict:
         """Update data via library."""
         try:
-            return await self.config_entry.runtime_data.client.async_get_data()
-        except IdokepApiClientAuthenticationError as exception:
-            raise ConfigEntryAuthFailed(exception) from exception
-        except IdokepApiClientError as exception:
+            location = self.config_entry.data["location"]
+            data = await self.config_entry.runtime_data.client.async_get_weather_data(
+                location
+            )
+            if not data:
+                raise Exception("No weather data found for location: %s", location)
+            return data
+        except Exception as exception:
             raise UpdateFailed(exception) from exception
