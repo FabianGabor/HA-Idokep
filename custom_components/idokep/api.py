@@ -284,7 +284,7 @@ class IdokepApiClient:
                     if icon_a and isinstance(icon_a, Tag):
                         condition_val = icon_a.get("data-bs-content")
                         if isinstance(condition_val, str):
-                            condition = condition_val
+                            condition = self._map_condition(condition_val)
                     if (
                         hour_div
                         and temp_div
@@ -314,9 +314,7 @@ class IdokepApiClient:
                         forecast_item = {
                             "datetime": dt_iso,
                             "temperature": temp,
-                            "condition": self._map_condition(condition)
-                            if condition
-                            else None,
+                            "condition": condition
                         }
                         forecast.append(forecast_item)
                 if forecast:
@@ -355,6 +353,16 @@ class IdokepApiClient:
                             return self._map_condition(text_match.group(1).strip())
             return None
 
+        def extract_precipitation(col: Tag) -> int:
+            precip_span = col.find("span", class_="ik mm")
+            if precip_span and isinstance(precip_span, Tag):
+                precip_text = precip_span.text.strip()
+                if precip_text:
+                    match = re.search(r"(\d+)", precip_text)
+                    if match:
+                        return int(match.group(1))
+            return 0
+
         result = {}
         try:
             async with (
@@ -371,16 +379,19 @@ class IdokepApiClient:
                 for i, col in enumerate(daily_cols):
                     if not isinstance(col, Tag):
                         continue
+                    forecast_date = today + datetime.timedelta(days=i)
                     min_temp = extract_temp(col, "ik min")
                     max_temp = extract_temp(col, "ik max")
                     condition = extract_condition(col)
-                    forecast_date = today + datetime.timedelta(days=i)
+                    precipitation = extract_precipitation(col)
+
                     daily_forecast.append(
                         {
                             "datetime": str(forecast_date),
                             "temperature": max_temp,
                             "templow": min_temp,
                             "condition": condition,
+                            "precipitation": precipitation
                         }
                     )
                 if daily_forecast:
