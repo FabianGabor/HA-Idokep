@@ -1,8 +1,15 @@
+"""Időkép Weather Entity for Home Assistant."""
+
+from collections.abc import Callable
+from typing import Any
+
 from homeassistant.components.weather import (
     Forecast,
     WeatherEntity,
 )
 from homeassistant.components.weather.const import WeatherEntityFeature
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN, NAME
 from .coordinator import IdokepDataUpdateCoordinator
@@ -88,6 +95,13 @@ class IdokepWeatherEntity(IdokepEntity, WeatherEntity):
         return self.coordinator.data.get("daily_forecast", [])
 
 
-async def async_setup_entry(hass, entry, async_add_entities) -> None:
+
+
+
+async def async_setup_entry(
+    _hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: Callable[[list[Any]], None],
+) -> None:
     """Set up the weather entity."""
     async_add_entities([IdokepWeatherEntity(entry.runtime_data.coordinator)])

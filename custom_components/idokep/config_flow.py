@@ -12,6 +12,15 @@ from .api import IdokepApiClient
 from .const import DOMAIN, LOGGER
 
 
+class WeatherDataFetchError(ValueError):
+    """Exception raised when weather data cannot be fetched for a given location."""
+
+    def __init__(self, location: str) -> None:
+        """Initialize WeatherDataFetchError with the given location."""
+        msg = f"Could not fetch weather data for {location}"
+        super().__init__(msg)
+
+
 class IdokepFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     """Config flow for Idokep."""
 
@@ -28,7 +37,7 @@ class IdokepFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 await self._test_location(
                     location=user_input["location"],
                 )
-            except Exception as exception:
+            except ValueError as exception:
                 LOGGER.error(exception)
                 _errors["base"] = "connection"
             else:
@@ -66,4 +75,4 @@ class IdokepFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         data = await client.async_get_weather_data(location)
         LOGGER.debug("Idokep scraped data for location '%s': %s", location, data)
         if not data or "temperature" not in data:
-            raise ValueError("Could not fetch weather data for %s", location)
+            raise WeatherDataFetchError(location)

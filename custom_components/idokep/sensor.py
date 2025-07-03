@@ -94,6 +94,6 @@ class IdokepSensor(IdokepEntity, SensorEntity):
         ):
             try:
                 return datetime.fromisoformat(value)
-            except Exception:
+            except ValueError:
                 return None
         return value
