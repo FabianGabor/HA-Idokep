@@ -1,4 +1,4 @@
-"""Sample API Client."""
+"""Időkép API Client."""
 
 from __future__ import annotations
 
@@ -135,7 +135,18 @@ class IdokepApiClient:
         """
         url = f"https://www.idokep.hu/idojaras/{location}"
         forecast_url = f"https://www.idokep.hu/elorejelzes/{location}"
+        daily_url = f"https://www.idokep.hu/30napos/{location}"
         data = {}
+        try:
+            data.update(await self._scrape_current_weather(url))
+            data.update(await self._scrape_hourly_forecast(forecast_url))
+            data.update(await self._scrape_daily_forecast(daily_url))
+        except (aiohttp.ClientError, TimeoutError, socket.gaierror) as exc:
+            LOGGER.error("Error scraping Idokep: %s", exc)
+        return data
+
+    async def _scrape_current_weather(self, url: str) -> dict:
+        result = {}
         try:
             async with async_timeout.timeout(10), self._session.get(url) as response:
                 response.raise_for_status()
@@ -144,113 +155,158 @@ class IdokepApiClient:
 
                 # Temperature
                 temp_div = soup.find("div", class_="ik current-temperature")
-                if temp_div:
+                if isinstance(temp_div, Tag):
                     match = re.search(r"(-?\d+)[^\d]*C", temp_div.text)
                     if match:
-                        data["temperature"] = int(match.group(1))
+                        result["temperature"] = int(match.group(1))
 
                 # Weather condition
                 cond_div = soup.find("div", class_="ik current-weather")
-                if cond_div:
+                if isinstance(cond_div, Tag):
                     condition = cond_div.text.strip()
-                    data["condition"] = self._map_condition(condition)
+                    result["condition"] = self._map_condition(condition)
 
                 # Weather title (e.g., 'Jelenleg')
                 title_div = soup.find("div", class_="ik current-weather-title")
-                if title_div:
-                    data["weather_title"] = title_div.text.strip()
+                if isinstance(title_div, Tag):
+                    result["weather_title"] = title_div.text.strip()
 
-                # Sunrise and sunset (look for divs with img alt="Napkelte" or "Napnyugta")
-                today = datetime.datetime.now().date()
-                local_tz = datetime.datetime.now().astimezone().tzinfo
-                for div in soup.find_all("div"):
-                    img = div.find("img") if hasattr(div, "find") else None
-                    if img and isinstance(img, Tag):
-                        alt = img.attrs.get("alt", "")
-                        if "Napkelte" in alt:
-                            text = div.get_text(strip=True)
-                            match = re.search(r"Napkelte\s*([0-9]{1,2}:[0-9]{2})", text)
-                            if match:
-                                sunrise_time = match.group(1)
-                                hour, minute = map(int, sunrise_time.split(":"))
-                                dt = datetime.datetime.combine(today, datetime.time(hour, minute, tzinfo=local_tz))
-                                data["sunrise"] = dt.isoformat()
-                                LOGGER.debug("Parsed sunrise ISO: %s (type: %s)", data["sunrise"], type(data["sunrise"]))
-                        if "Napnyugta" in alt:
-                            text = div.get_text(strip=True)
-                            match = re.search(r"Napnyugta\s*([0-9]{1,2}:[0-9]{2})", text)
-                            if match:
-                                sunset_time = match.group(1)
-                                hour, minute = map(int, sunset_time.split(":"))
-                                dt = datetime.datetime.combine(today, datetime.time(hour, minute, tzinfo=local_tz))
-                                data["sunset"] = dt.isoformat()
-                                LOGGER.debug("Parsed sunset ISO: %s (type: %s)", data["sunset"], type(data["sunset"]))
+                # Sunrise and sunset
+                result.update(self._parse_sunrise_sunset(soup))
 
-                # Short forecast text (skip divs with img or button)
-                for div in soup.find_all("div", class_="pt-2"):
-                    if not div.find("img") and not div.find("button"):
-                        text = div.get_text(strip=True)
-                        if (
-                            text
-                            and "Napkelte" not in text
-                            and "Napnyugta" not in text
-                            and len(text) > 3
-                        ):
-                            data["short_forecast"] = text
-                            break
+                # Short forecast text
+                short_forecast = self._parse_short_forecast(soup)
+                if short_forecast:
+                    result["short_forecast"] = short_forecast
 
-            # Fetch hourly forecast from forecast_url
-            async with async_timeout.timeout(10), self._session.get(forecast_url) as response:
+        except (aiohttp.ClientError, TimeoutError, socket.gaierror) as exc:
+            LOGGER.error("Error scraping current weather: %s", exc)
+        return result
+
+    def _extract_time_from_text(
+        self,
+        label: str,
+        div: Tag,
+        today: datetime.date,
+        local_tz: datetime.tzinfo,
+        text: str,
+    ) -> str | None:
+        if label in text:
+            text = div.get_text(strip=True)
+            match = re.search(rf"{label}\s*([0-9]{{1,2}}:[0-9]{{2}})", text)
+            if match:
+                time_str = match.group(1)
+                hour, minute = map(int, time_str.split(":"))
+                dt = datetime.datetime.combine(
+                    today, datetime.time(hour, minute, tzinfo=local_tz)
+                )
+                return dt.isoformat()
+        return None
+
+    def _parse_sunrise_sunset(self, soup: BeautifulSoup) -> dict:
+        """Extract sunrise and sunset times from the soup."""
+        result = {}
+        today = datetime.datetime.now(tz=datetime.UTC).date()
+        local_tz = datetime.datetime.now().astimezone().tzinfo or datetime.UTC
+        for div in soup.find_all("div"):
+            if not isinstance(div, Tag):
+                continue
+            img = div.find("img") if hasattr(div, "find") else None
+            if img and isinstance(img, Tag):
+                alt = str(img.attrs.get("alt", ""))
+
+                sunrise_iso = self._extract_time_from_text(
+                    "Napkelte", div, today, local_tz, alt
+                )
+                if sunrise_iso is not None:
+                    result["sunrise"] = sunrise_iso
+
+                sunset_iso = self._extract_time_from_text(
+                    "Napnyugta", div, today, local_tz, alt
+                )
+                if sunset_iso is not None:
+                    result["sunset"] = sunset_iso
+        return result
+
+    def _parse_short_forecast(self, soup: BeautifulSoup) -> str | None:
+        """Extract short forecast text from the soup."""
+        for div in soup.find_all("div", class_="pt-2"):
+            if not isinstance(div, Tag):
+                continue
+            if not div.find("img") and not div.find("button"):
+                text = div.get_text(strip=True)
+                if text and "Napkelte" not in text and "Napnyugta" not in text:
+                    return text
+        return None
+
+    async def _scrape_hourly_forecast(self, forecast_url: str) -> dict:
+        result = {}
+        try:
+            async with (
+                async_timeout.timeout(10),
+                self._session.get(forecast_url) as response,
+            ):
                 response.raise_for_status()
                 html = await response.text()
                 soup = BeautifulSoup(html, "html.parser")
 
                 forecast = []
-                now = datetime.datetime.now()
+                now = datetime.datetime.now(tz=datetime.UTC)
                 current_hour = now.hour
                 current_date = now.date()
                 hourly_cards = soup.find_all(
                     "div", class_="ik new-hourly-forecast-card"
                 )
                 for card in hourly_cards:
-                    hour_div = card.find(
-                        "div", class_="ik new-hourly-forecast-hour"
+                    if not isinstance(card, Tag):
+                        continue
+                    hour_div = (
+                        card.find("div", class_="ik new-hourly-forecast-hour")
+                        if isinstance(card, Tag)
+                        else None
                     )
-                    temp_div = card.find("div", class_="ik tempValue")
-                    icon_a = card.find(
-                        "div", class_="forecast-icon-container"
-                    ).find("a")
-                    wind_div = card.find("div", class_="hourly-wind")
-                    wind_bearing = None
-                    wind_speed = None
+                    temp_div = (
+                        card.find("div", class_="ik tempValue")
+                        if isinstance(card, Tag)
+                        else None
+                    )
+                    icon_container = (
+                        card.find("div", class_="forecast-icon-container")
+                        if isinstance(card, Tag)
+                        else None
+                    )
+                    icon_a = (
+                        icon_container.find("a")
+                        if icon_container and isinstance(icon_container, Tag)
+                        else None
+                    )
                     condition = None
-                    if icon_a and icon_a.has_attr("data-bs-content"):
-                        condition = icon_a["data-bs-content"]
-                    if wind_div:
-                        wind_a = wind_div.find("a")
-                        wind_icon = (
-                            wind_a.find("div", class_="ik wind") if wind_a else None
-                        )
-                        if wind_icon and wind_icon.has_attr("class"):
-                            for c in wind_icon["class"]:
-                                if c.startswith("r") and c[1:].isdigit():
-                                    wind_bearing = int(c[1:])
-                    if hour_div and temp_div:
+                    if icon_a and isinstance(icon_a, Tag):
+                        condition_val = icon_a.get("data-bs-content")
+                        if isinstance(condition_val, str):
+                            condition = condition_val
+                    if (
+                        hour_div
+                        and temp_div
+                        and isinstance(hour_div, Tag)
+                        and isinstance(temp_div, Tag)
+                    ):
                         hour = hour_div.text.strip()
-                        temp_a = temp_div.find("a")
+                        temp_a = (
+                            temp_div.find("a") if isinstance(temp_div, Tag) else None
+                        )
                         temp = (
                             int(temp_a.text.strip())
-                            if temp_a and temp_a.text.strip().isdigit()
+                            if temp_a
+                            and isinstance(temp_a, Tag)
+                            and temp_a.text.strip().isdigit()
                             else None
                         )
-                        # Build ISO datetime for forecast
                         hour_int = int(hour.split(":")[0])
                         minute_int = int(hour.split(":")[1]) if ":" in hour else 0
                         forecast_date = current_date
                         if hour_int < current_hour:
-                            forecast_date = current_date + datetime.timedelta(
-                                days=1
-                            )
+                            forecast_date = current_date + datetime.timedelta(days=1)
                         dt = datetime.datetime.combine(
                             forecast_date, datetime.time(hour_int, minute_int)
                         )
@@ -264,74 +320,71 @@ class IdokepApiClient:
                         }
                         forecast.append(forecast_item)
                 if forecast:
-                    data["forecast"] = forecast[:24]  # Limit to 24 hours
+                    result["forecast"] = forecast[:24]
+        except (aiohttp.ClientError, TimeoutError, socket.gaierror) as exc:
+            LOGGER.error("Error scraping hourly forecast: %s", exc)
+        return result
 
-                LOGGER.debug("Napkelte: %s", data.get("sunrise"))
-                LOGGER.debug("Napnyugta: %s", data.get("sunset"))
-                LOGGER.debug("Short forecast: %s", data.get("short_forecast"))
-                LOGGER.debug("Hourly forecast: %s", data["forecast"])
+    async def _scrape_daily_forecast(self, daily_url: str) -> dict:
+        def extract_temp(div: Tag, class_name: str) -> int | None:
+            temp_div = div.find("div", class_=class_name)
+            if temp_div and isinstance(temp_div, Tag):
+                temp_a = temp_div.find("a")
+                if temp_a and isinstance(temp_a, Tag):
+                    match = re.search(r"(-?\d+)", temp_a.text)
+                    if match:
+                        return int(match.group(1))
+            return None
 
-            # --- 30-day daily forecast ---
-            daily_url = f"https://www.idokep.hu/30napos/{location}"
-            try:
-                async with async_timeout.timeout(10), self._session.get(daily_url) as response:
-                    response.raise_for_status()
-                    html = await response.text()
-                    soup = BeautifulSoup(html, "html.parser")
+        def extract_condition(col: Tag) -> str | None:
+            icon_alert = col.find("div", class_="ik dfIconAlert")
+            if icon_alert and isinstance(icon_alert, Tag):
+                a_tag = icon_alert.find("a")
+                if a_tag and isinstance(a_tag, Tag):
+                    popover = a_tag.get("data-bs-content")
+                    if isinstance(popover, str):
+                        match = re.search(
+                            r"popover-icon' src='[^']+'>([^<]+)<", popover
+                        )
+                        if match:
+                            return self._map_condition(match.group(1).strip())
+                        text_match = re.search(
+                            r"popover-icon' src='[^']+'>([^<]+)", popover
+                        )
+                        if text_match:
+                            return self._map_condition(text_match.group(1).strip())
+            return None
 
-                    daily_forecast = []
-                    daily_cols = soup.find_all("div", class_="ik dailyForecastCol")
-                    today = datetime.datetime.now().date()
-                    for i, col in enumerate(daily_cols):
-                        # Get min/max temps
-                        min_temp = None
-                        max_temp = None
-                        minmax_container = col.find("div", class_="ik min-max-container") if hasattr(col, "find") else None
-                        if minmax_container:
-                            max_div = minmax_container.find("div", class_="ik max") if hasattr(minmax_container, "find") else None
-                            min_div = minmax_container.find("div", class_="ik min") if hasattr(minmax_container, "find") else None
-                            if max_div:
-                                max_a = max_div.find("a") if hasattr(max_div, "find") else None
-                                if isinstance(max_a, Tag):
-                                    max_match = re.search(r"(-?\d+)", max_a.text)
-                                    if max_match:
-                                        max_temp = int(max_match.group(1))
-                            if min_div:
-                                min_a = min_div.find("a") if hasattr(min_div, "find") else None
-                                if isinstance(min_a, Tag):
-                                    min_match = re.search(r"(-?\d+)", min_a.text)
-                                    if min_match:
-                                        min_temp = int(min_match.group(1))
-                        # Get condition from icon popover or fallback
-                        condition = None
-                        icon_alert = col.find("div", class_="ik dfIconAlert") if hasattr(col, "find") else None
-                        if icon_alert:
-                            a_tag = icon_alert.find("a") if hasattr(icon_alert, "find") else None
-                            if a_tag and hasattr(a_tag, "get"):
-                                popover = a_tag.get("data-bs-content", "")
-                                match = re.search(r"popover-icon' src='[^']+'>([^<]+)<", popover)
-                                if match:
-                                    condition = self._map_condition(match.group(1).strip())
-                                else:
-                                    text_match = re.search(r"popover-icon' src='[^']+'>([^<]+)", popover)
-                                    if text_match:
-                                        condition = self._map_condition(text_match.group(1).strip())
-                        # Build forecast date (today + i)
-                        forecast_date = today + datetime.timedelta(days=i)
-                        daily_forecast.append({
+        result = {}
+        try:
+            async with (
+                async_timeout.timeout(10),
+                self._session.get(daily_url) as response,
+            ):
+                response.raise_for_status()
+                html = await response.text()
+                soup = BeautifulSoup(html, "html.parser")
+
+                daily_forecast = []
+                daily_cols = soup.find_all("div", class_="ik dailyForecastCol")
+                today = datetime.datetime.now(tz=datetime.UTC).date()
+                for i, col in enumerate(daily_cols):
+                    if not isinstance(col, Tag):
+                        continue
+                    min_temp = extract_temp(col, "ik min")
+                    max_temp = extract_temp(col, "ik max")
+                    condition = extract_condition(col)
+                    forecast_date = today + datetime.timedelta(days=i)
+                    daily_forecast.append(
+                        {
                             "datetime": str(forecast_date),
                             "temperature": max_temp,
                             "templow": min_temp,
                             "condition": condition,
-                        })
-
-                        LOGGER.debug("Daily forecast for %s: %s", forecast_date, daily_forecast[-1])
-
-                    if daily_forecast:
-                        data["daily_forecast"] = daily_forecast
-            except Exception as exc:
-                LOGGER.error("Error scraping 30-napos Idokep: %s", exc)
-
-        except Exception as exc:
-            LOGGER.error("Error scraping Idokep: %s", exc)
-        return data
+                        }
+                    )
+                if daily_forecast:
+                    result["daily_forecast"] = daily_forecast
+        except (aiohttp.ClientError, TimeoutError, socket.gaierror) as exc:
+            LOGGER.error("Error scraping 30-napos Idokep: %s", exc)
+        return result
