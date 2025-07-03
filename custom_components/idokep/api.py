@@ -314,7 +314,7 @@ class IdokepApiClient:
                         forecast_item = {
                             "datetime": dt_iso,
                             "temperature": temp,
-                            "condition": condition
+                            "condition": condition,
                         }
                         forecast.append(forecast_item)
                 if forecast:
@@ -391,7 +391,7 @@ class IdokepApiClient:
                             "temperature": max_temp,
                             "templow": min_temp,
                             "condition": condition,
-                            "precipitation": precipitation
+                            "precipitation": precipitation,
                         }
                     )
                 if daily_forecast:
