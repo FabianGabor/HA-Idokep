@@ -18,6 +18,7 @@ class NoWeatherDataError(Exception):
         """Initialize NoWeatherDataError with the given location."""
         super().__init__(f"No weather data found for location: {location}")
 
+
 class IdokepDataUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage fetching data from the API."""
 

@@ -95,9 +95,6 @@ class IdokepWeatherEntity(IdokepEntity, WeatherEntity):
         return self.coordinator.data.get("daily_forecast", [])
 
 
-
-
-
 async def async_setup_entry(
     _hass: HomeAssistant,
     entry: ConfigEntry,
