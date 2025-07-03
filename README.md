@@ -6,9 +6,9 @@ Ez a Home Assistant egyéni integráció az Időkép időjárás szolgáltatás 
 
 1. **Hozzáadás a HACS-hoz:**
    - Nyisd meg a Home Assistantot böngészőben.
-   - Navigálj a **Beállítások > Kiegészítők > HACS** menüponthoz.
-   - Kattints a bal oldali menüben a **Közösségi tárolók** (Custom repositories) gombra.
-   - Add hozzá a GitHub repó URL-jét ehhez a tárolóhoz (pl. `https://github.com/FabianGabor/HA-Idokep`).
+   - Navigálj a **HACS** menüponthoz.
+   - Kattints a jobb felső sarokban a **⋮** gombra és válaszd az **Egyedi repók" menüpontot.
+   - Add hozzá a GitHub repó URL-jét ehhez a tárolóhoz: `https://github.com/FabianGabor/HA-Idokep`
    - Válaszd ki a típusnál az `Integráció` (Integration) lehetőséget.
 
 2. **Telepítés:**
