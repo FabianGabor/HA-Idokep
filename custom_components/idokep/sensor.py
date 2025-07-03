@@ -1,0 +1,99 @@
+"""Sensor platform for idokep."""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import TYPE_CHECKING
+
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorEntityDescription,
+)
+
+from .entity import IdokepEntity
+
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+    from .coordinator import IdokepDataUpdateCoordinator
+    from .data import IdokepConfigEntry
+
+ENTITY_DESCRIPTIONS = (
+    SensorEntityDescription(
+        key="temperature",
+        name="Current Temperature",
+        icon="mdi:thermometer",
+        native_unit_of_measurement="°C",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class="measurement",
+    ),
+    SensorEntityDescription(
+        key="condition",
+        name="Current Weather Condition",
+        icon="mdi:weather-partly-cloudy",
+    ),
+    SensorEntityDescription(
+        key="sunrise",
+        name="Sunrise",
+        icon="mdi:weather-sunset-up",
+        device_class=SensorDeviceClass.TIMESTAMP,
+    ),
+    SensorEntityDescription(
+        key="sunset",
+        name="Sunset",
+        icon="mdi:weather-sunset-down",
+        device_class=SensorDeviceClass.TIMESTAMP,
+    ),
+    SensorEntityDescription(
+        key="short_forecast",
+        name="Short Forecast",
+        icon="mdi:weather-cloudy-clock",
+    ),
+)
+
+
+async def async_setup_entry(
+    hass: HomeAssistant,  # noqa: ARG001 Unused function argument: `hass`
+    entry: IdokepConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Set up the sensor platform."""
+    async_add_entities(
+        IdokepSensor(
+            coordinator=entry.runtime_data.coordinator,
+            entity_description=entity_description,
+        )
+        for entity_description in ENTITY_DESCRIPTIONS
+    )
+
+
+class IdokepSensor(IdokepEntity, SensorEntity):
+    """Idokep Sensor class."""
+
+    def __init__(
+        self,
+        coordinator: IdokepDataUpdateCoordinator,
+        entity_description: SensorEntityDescription,
+    ) -> None:
+        """Initialize the sensor class."""
+        super().__init__(coordinator)
+        self.entity_description = entity_description
+        self._attr_unique_id = (
+            f"{coordinator.config_entry.entry_id}_{entity_description.key}"
+        )
+
+    @property
+    def native_value(self) -> str | int | float | datetime | None:
+        """Return the native value of the sensor."""
+        value = self.coordinator.data.get(self.entity_description.key)
+        if (
+            self.entity_description.device_class == SensorDeviceClass.TIMESTAMP
+            and isinstance(value, str)
+        ):
+            try:
+                return datetime.fromisoformat(value)
+            except ValueError:
+                return None
+        return value
