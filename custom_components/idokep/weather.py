@@ -38,31 +38,6 @@ class IdokepWeatherEntity(IdokepEntity, WeatherEntity):
         return self.coordinator.data.get("condition")
 
     @property
-    def humidity(self) -> int | None:
-        """Return the current humidity (%)."""
-        return self.coordinator.data.get("humidity")
-
-    @property
-    def pressure(self) -> int | None:
-        """Return the current pressure (hPa)."""
-        return self.coordinator.data.get("pressure")
-
-    @property
-    def wind_speed(self) -> float | None:
-        """Return the current wind speed (km/h)."""
-        return self.coordinator.data.get("wind_speed")
-
-    @property
-    def wind_bearing(self) -> int | None:
-        """Return the wind bearing (degrees)."""
-        return self.coordinator.data.get("wind_bearing")
-
-    @property
-    def visibility(self) -> float | None:
-        """Return the visibility (km)."""
-        return self.coordinator.data.get("visibility")
-
-    @property
     def supported_forecast_types(self) -> tuple[str, ...]:
         """Return the supported forecast types."""
         return ("hourly", "daily")
@@ -72,6 +47,8 @@ class IdokepWeatherEntity(IdokepEntity, WeatherEntity):
         """Return additional state attributes."""
         attrs = dict(super().extra_state_attributes or {})
         attrs["temperature"] = self.temperature
+        attrs["temperature_unit"] = "°C"
+        attrs["precipitation_unit"] = "mm"
         attrs["short_forecast"] = self.coordinator.data.get("short_forecast")
         return attrs
 
