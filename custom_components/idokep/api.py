@@ -271,6 +271,67 @@ class IdokepApiClient:
                 LOGGER.debug("Short forecast: %s", data.get("short_forecast"))
                 LOGGER.debug("Hourly forecast: %s", data["forecast"])
 
+            # --- 30-day daily forecast ---
+            daily_url = f"https://www.idokep.hu/30napos/{location}"
+            try:
+                async with async_timeout.timeout(10), self._session.get(daily_url) as response:
+                    response.raise_for_status()
+                    html = await response.text()
+                    soup = BeautifulSoup(html, "html.parser")
+
+                    daily_forecast = []
+                    daily_cols = soup.find_all("div", class_="ik dailyForecastCol")
+                    today = datetime.datetime.now().date()
+                    for i, col in enumerate(daily_cols):
+                        # Get min/max temps
+                        min_temp = None
+                        max_temp = None
+                        minmax_container = col.find("div", class_="ik min-max-container") if hasattr(col, "find") else None
+                        if minmax_container:
+                            max_div = minmax_container.find("div", class_="ik max") if hasattr(minmax_container, "find") else None
+                            min_div = minmax_container.find("div", class_="ik min") if hasattr(minmax_container, "find") else None
+                            if max_div:
+                                max_a = max_div.find("a") if hasattr(max_div, "find") else None
+                                if isinstance(max_a, Tag):
+                                    max_match = re.search(r"(-?\d+)", max_a.text)
+                                    if max_match:
+                                        max_temp = int(max_match.group(1))
+                            if min_div:
+                                min_a = min_div.find("a") if hasattr(min_div, "find") else None
+                                if isinstance(min_a, Tag):
+                                    min_match = re.search(r"(-?\d+)", min_a.text)
+                                    if min_match:
+                                        min_temp = int(min_match.group(1))
+                        # Get condition from icon popover or fallback
+                        condition = None
+                        icon_alert = col.find("div", class_="ik dfIconAlert") if hasattr(col, "find") else None
+                        if icon_alert:
+                            a_tag = icon_alert.find("a") if hasattr(icon_alert, "find") else None
+                            if a_tag and hasattr(a_tag, "get"):
+                                popover = a_tag.get("data-bs-content", "")
+                                match = re.search(r"popover-icon' src='[^']+'>([^<]+)<", popover)
+                                if match:
+                                    condition = self._map_condition(match.group(1).strip())
+                                else:
+                                    text_match = re.search(r"popover-icon' src='[^']+'>([^<]+)", popover)
+                                    if text_match:
+                                        condition = self._map_condition(text_match.group(1).strip())
+                        # Build forecast date (today + i)
+                        forecast_date = today + datetime.timedelta(days=i)
+                        daily_forecast.append({
+                            "datetime": str(forecast_date),
+                            "temperature": max_temp,
+                            "templow": min_temp,
+                            "condition": condition,
+                        })
+
+                        LOGGER.debug("Daily forecast for %s: %s", forecast_date, daily_forecast[-1])
+
+                    if daily_forecast:
+                        data["daily_forecast"] = daily_forecast
+            except Exception as exc:
+                LOGGER.error("Error scraping 30-napos Idokep: %s", exc)
+
         except Exception as exc:
             LOGGER.error("Error scraping Idokep: %s", exc)
         return data

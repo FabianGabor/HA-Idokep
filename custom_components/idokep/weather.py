@@ -4,16 +4,21 @@ from homeassistant.components.weather import (
 )
 from homeassistant.components.weather.const import WeatherEntityFeature
 
+from .const import DOMAIN, NAME
+from .coordinator import IdokepDataUpdateCoordinator
 from .entity import IdokepEntity
 
 
 class IdokepWeatherEntity(IdokepEntity, WeatherEntity):
     """Idokep Weather entity."""
 
-    def __init__(self, coordinator):
+    def __init__(self, coordinator: IdokepDataUpdateCoordinator) -> None:
+        """Initialize the IdokepWeatherEntity with the given coordinator."""
         super().__init__(coordinator)
-        self._attr_name = "Idokep Weather"
-        self._attr_supported_features = WeatherEntityFeature.FORECAST_HOURLY
+        self._attr_name = NAME
+        self._attr_supported_features = (
+            WeatherEntityFeature.FORECAST_DAILY | WeatherEntityFeature.FORECAST_HOURLY
+        )
 
     @property
     def temperature(self) -> int | None:
@@ -53,19 +58,36 @@ class IdokepWeatherEntity(IdokepEntity, WeatherEntity):
     @property
     def supported_forecast_types(self) -> tuple[str, ...]:
         """Return the supported forecast types."""
-        return ("hourly",)
+        return ("hourly", "daily")
 
-    async def async_get_forecast(self, forecast_type: str) -> list[Forecast]:
-        """Return forecast data for the requested type (hourly only)."""
-        if forecast_type == "hourly":
-            return self.coordinator.data.get("forecast", [])
-        return []
+    @property
+    def extra_state_attributes(self) -> dict:
+        """Return additional state attributes."""
+        attrs = dict(super().extra_state_attributes or {})
+        attrs["temperature"] = self.temperature
+        attrs["short_forecast"] = self.coordinator.data.get("short_forecast")
+        return attrs
+
+    @property
+    def device_info(self) -> dict:
+        """Return device information for the integration."""
+        return {
+            "identifiers": {(DOMAIN, self.coordinator.config_entry.entry_id)},
+            "name": NAME,
+            "manufacturer": NAME,
+            "model": "Időkép Weather Integration",
+            "entry_type": "service",
+        }
 
     async def async_forecast_hourly(self) -> list[Forecast]:
         """Return the hourly forecast."""
         return self.coordinator.data.get("forecast", [])
 
+    async def async_forecast_daily(self) -> list[Forecast]:
+        """Return the daily forecast in the format expected by Home Assistant UI."""
+        return self.coordinator.data.get("daily_forecast", [])
 
-async def async_setup_entry(hass, entry, async_add_entities):
+
+async def async_setup_entry(hass, entry, async_add_entities) -> None:
     """Set up the weather entity."""
     async_add_entities([IdokepWeatherEntity(entry.runtime_data.coordinator)])
