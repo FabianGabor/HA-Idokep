@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import re
 import socket
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -29,14 +30,14 @@ class TestIdokepApiClientExceptions:
         assert str(error) == "test error"
 
     def test_communication_error_inheritance(self) -> None:
-        """Test that IdokepApiClientCommunicationError inherits from IdokepApiClientError."""
+        """Test that IdokepApiClientCommunicationError inherits correctly."""
         error = IdokepApiClientCommunicationError("comm error")
         assert isinstance(error, IdokepApiClientError)
         assert isinstance(error, Exception)
         assert str(error) == "comm error"
 
     def test_authentication_error_inheritance(self) -> None:
-        """Test that IdokepApiClientAuthenticationError inherits from IdokepApiClientError."""
+        """Test that IdokepApiClientAuthenticationError inherits correctly."""
         error = IdokepApiClientAuthenticationError("auth error")
         assert isinstance(error, IdokepApiClientError)
         assert isinstance(error, Exception)
@@ -171,9 +172,11 @@ class TestIdokepApiClient:
         """Test API wrapper with timeout error."""
         mock_session.request = AsyncMock(side_effect=TimeoutError("Timeout"))
 
-        with patch("custom_components.idokep.api.async_timeout.timeout"):
-            with pytest.raises(IdokepApiClientCommunicationError) as exc_info:
-                await api_client._api_wrapper("GET", "http://test.com")
+        with (
+            patch("custom_components.idokep.api.async_timeout.timeout"),
+            pytest.raises(IdokepApiClientCommunicationError) as exc_info,
+        ):
+            await api_client._api_wrapper("GET", "http://test.com")
 
         assert "Timeout error fetching information" in str(exc_info.value)
 
@@ -186,9 +189,11 @@ class TestIdokepApiClient:
             side_effect=aiohttp.ClientError("Client error")
         )
 
-        with patch("custom_components.idokep.api.async_timeout.timeout"):
-            with pytest.raises(IdokepApiClientCommunicationError) as exc_info:
-                await api_client._api_wrapper("GET", "http://test.com")
+        with (
+            patch("custom_components.idokep.api.async_timeout.timeout"),
+            pytest.raises(IdokepApiClientCommunicationError) as exc_info,
+        ):
+            await api_client._api_wrapper("GET", "http://test.com")
 
         assert "Error fetching information" in str(exc_info.value)
 
@@ -199,9 +204,11 @@ class TestIdokepApiClient:
         """Test API wrapper with socket error."""
         mock_session.request = AsyncMock(side_effect=socket.gaierror("Socket error"))
 
-        with patch("custom_components.idokep.api.async_timeout.timeout"):
-            with pytest.raises(IdokepApiClientCommunicationError) as exc_info:
-                await api_client._api_wrapper("GET", "http://test.com")
+        with (
+            patch("custom_components.idokep.api.async_timeout.timeout"),
+            pytest.raises(IdokepApiClientCommunicationError) as exc_info,
+        ):
+            await api_client._api_wrapper("GET", "http://test.com")
 
         assert "Error fetching information" in str(exc_info.value)
 
@@ -212,9 +219,11 @@ class TestIdokepApiClient:
         """Test API wrapper with general exception."""
         mock_session.request = AsyncMock(side_effect=ValueError("Value error"))
 
-        with patch("custom_components.idokep.api.async_timeout.timeout"):
-            with pytest.raises(IdokepApiClientError) as exc_info:
-                await api_client._api_wrapper("GET", "http://test.com")
+        with (
+            patch("custom_components.idokep.api.async_timeout.timeout"),
+            pytest.raises(IdokepApiClientError) as exc_info,
+        ):
+            await api_client._api_wrapper("GET", "http://test.com")
 
         assert "Something really wrong happened!" in str(exc_info.value)
 
@@ -414,7 +423,7 @@ class TestIdokepApiClientWeatherScraping:
 
     @pytest.mark.asyncio
     async def test_async_get_weather_data_success(
-        self, api_client: IdokepApiClient, mock_session: Mock
+        self, api_client: IdokepApiClient
     ) -> None:
         """Test complete weather data retrieval."""
         # Mock all three scraping methods
@@ -448,7 +457,7 @@ class TestIdokepApiClientWeatherScraping:
 
     @pytest.mark.asyncio
     async def test_async_get_weather_data_partial_failure(
-        self, api_client: IdokepApiClient, mock_session: Mock
+        self, api_client: IdokepApiClient
     ) -> None:
         """Test weather data retrieval with some methods failing."""
         current_data = {"temperature": 22, "condition": "sunny"}
@@ -550,7 +559,8 @@ class TestIdokepApiClientWeatherScraping:
         html = """
         <div class="col">
             <div class="ik dfIconAlert">
-                <a data-bs-content="popover-icon' src='icon.png'>Eső viharos széllel<"></a>
+                <a data-bs-content="popover-icon' src='icon.png'>Eső viharos széllel<">
+                </a>
             </div>
         </div>
         """
@@ -596,9 +606,7 @@ class TestIdokepApiClientEdgeCases:
         """Test condition mapping with empty string."""
         assert api_client._map_condition("") == "unknown"
 
-    def test_extract_temperature_invalid_format(
-        self, api_client: IdokepApiClient
-    ) -> None:
+    def test_extract_temperature_invalid_format(self) -> None:
         """Test temperature extraction with invalid format."""
         html = '<div class="ik current-temperature">Invalid temp</div>'
         soup = BeautifulSoup(html, "html.parser")
@@ -606,8 +614,6 @@ class TestIdokepApiClientEdgeCases:
         # This would be called internally by _scrape_current_weather
         temp_div = soup.find("div", class_="ik current-temperature")
         if temp_div is not None:
-            import re
-
             match = re.search(r"(-?\d+)[^\d]*C", temp_div.text)
             assert match is None  # Should not find valid temperature
 

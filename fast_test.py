@@ -38,7 +38,7 @@ def run_fast_tests() -> int:
             return result.returncode
 
     else:
-        print("⚠️  Home Assistant not found in current environment")
+        print("⚠️ Home Assistant not found in current environment")
         print("🔄 Falling back to Nox with quick-test session...")
         print("📌 This will install Home Assistant (may take 2-3 minutes first time)")
 
@@ -46,7 +46,6 @@ def run_fast_tests() -> int:
 
         try:
             result = subprocess.run(cmd, check=False, cwd=Path(__file__).parent)
-            return result.returncode
         except KeyboardInterrupt:
             print("\n⚠️  Test run cancelled by user")
             return 1
@@ -54,6 +53,8 @@ def run_fast_tests() -> int:
             print("❌ Nox not found. Please install nox: pip install nox")
             print("💡 Or install Home Assistant: pip install homeassistant")
             return 1
+        else:
+            return result.returncode
 
 
 if __name__ == "__main__":

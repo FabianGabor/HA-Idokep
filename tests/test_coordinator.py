@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+from logging import getLogger
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -26,9 +28,6 @@ class TestIdokepDataUpdateCoordinator:
 
     def test_coordinator_initialization(self, mock_hass: Mock) -> None:
         """Test coordinator initialization."""
-        from datetime import timedelta
-        from logging import getLogger
-
         logger = getLogger(__name__)
         name = "test_coordinator"
         update_interval = timedelta(minutes=30)
@@ -46,9 +45,6 @@ class TestIdokepDataUpdateCoordinator:
     @pytest.mark.asyncio
     async def test_async_update_data_success(self, mock_hass: Mock) -> None:
         """Test successful data update."""
-        from datetime import timedelta
-        from logging import getLogger
-
         logger = getLogger(__name__)
         name = "test_coordinator"
         update_interval = timedelta(minutes=30)
@@ -71,9 +67,6 @@ class TestIdokepDataUpdateCoordinator:
     @pytest.mark.asyncio
     async def test_async_update_data_no_weather_error(self, mock_hass: Mock) -> None:
         """Test data update with NoWeatherDataError."""
-        from datetime import timedelta
-        from logging import getLogger
-
         logger = getLogger(__name__)
         name = "test_coordinator"
         update_interval = timedelta(minutes=30)
@@ -100,9 +93,6 @@ class TestIdokepDataUpdateCoordinator:
     @pytest.mark.asyncio
     async def test_async_update_data_general_exception(self, mock_hass: Mock) -> None:
         """Test data update with general exception."""
-        from datetime import timedelta
-        from logging import getLogger
-
         logger = getLogger(__name__)
         name = "test_coordinator"
         update_interval = timedelta(minutes=30)
@@ -118,9 +108,10 @@ class TestIdokepDataUpdateCoordinator:
             side_effect=Exception("Network error")
         )
 
-        # The coordinator wraps any exception in UpdateFailed, not just NoWeatherDataError
+        # The coordinator wraps any exception in UpdateFailed, not just
+        # NoWeatherDataError
         # So we expect the original Exception to propagate
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(Exception, match="Network error") as exc_info:
             await coordinator._async_update_data()
 
         assert "Network error" in str(exc_info.value)

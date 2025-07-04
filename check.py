@@ -140,14 +140,16 @@ def main() -> None:
         print(f"\n{Colors.RED}❌ {failed} check(s) failed{Colors.END}")
         if args.coverage and not args.skip_tests:
             print(
-                f"{Colors.YELLOW}📊 Coverage report available at htmlcov/index.html{Colors.END}"
+                f"{Colors.YELLOW}📊 Coverage report available at "
+                f"htmlcov/index.html{Colors.END}"
             )
         sys.exit(1)
     else:
         print(f"\n{Colors.GREEN}🎉 All checks passed!{Colors.END}")
         if args.coverage and not args.skip_tests:
             print(
-                f"{Colors.GREEN}📊 Coverage report generated at htmlcov/index.html{Colors.END}"
+                f"{Colors.GREEN}📊 Coverage report generated at "
+                f"htmlcov/index.html{Colors.END}"
             )
 
 
