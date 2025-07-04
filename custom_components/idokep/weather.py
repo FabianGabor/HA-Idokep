@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import TYPE_CHECKING
 
 from homeassistant.components.weather import (
@@ -10,6 +11,7 @@ from homeassistant.components.weather import (
     WeatherEntity,
 )
 from homeassistant.components.weather.const import WeatherEntityFeature
+from homeassistant.helpers.device_registry import DeviceInfo
 
 from .const import DOMAIN, NAME
 from .entity import IdokepEntity
@@ -46,13 +48,41 @@ class IdokepWeatherEntity(IdokepEntity, WeatherEntity):
     def __init__(self, coordinator: IdokepDataUpdateCoordinator) -> None:
         """Initialize the IdokepWeatherEntity with the given coordinator."""
         super().__init__(coordinator)
-        self._attr_name = NAME
-        self._attr_unique_id = f"{coordinator.config_entry.entry_id}_weather"
+        location = coordinator.config_entry.data.get("location", "")
+        # Sanitize location for entity ID (remove special chars, etc.)
+        sanitized_location = re.sub(
+            r"[^a-zA-Z0-9_-]", "_", location.lower().replace(" ", "_").replace("-", "_")
+        )
+        # Remove multiple consecutive underscores
+        sanitized_location = re.sub(r"_+", "_", sanitized_location).strip("_")
+        # Fallback to 'unknown' if location becomes empty after sanitization
+        if not sanitized_location:
+            sanitized_location = "unknown"
+
+        # Set entity name to sanitized location for proper entity_id
+        self._attr_name = sanitized_location.replace("_", " ").title()
+        # Set the object_id to control the entity_id generation
+        self._attr_object_id = f"idokep_{sanitized_location}"
+        self._attr_unique_id = (
+            f"{coordinator.config_entry.entry_id}_weather_{sanitized_location}"
+        )
         self._attr_supported_features = (
             WeatherEntityFeature.FORECAST_DAILY | WeatherEntityFeature.FORECAST_HOURLY
         )
         _LOGGER.debug(
-            "Initialized weather entity with unique_id: %s", self._attr_unique_id
+            "Initialized weather entity with unique_id: %s for location: %s",
+            self._attr_unique_id,
+            location,
+        )
+
+        self._attr_device_info = DeviceInfo(
+            identifiers={
+                (
+                    coordinator.config_entry.domain,
+                    f"{coordinator.config_entry.entry_id}_{sanitized_location}",
+                ),
+            },
+            name=f"Időkép {location}",
         )
 
     @property
@@ -86,6 +116,10 @@ class IdokepWeatherEntity(IdokepEntity, WeatherEntity):
         """Return additional state attributes."""
         attrs = dict(super().extra_state_attributes or {})
         attrs["temperature"] = self.temperature
+        attrs["precipitation"] = self.coordinator.data.get("precipitation", 0)
+        attrs["precipitation_probability"] = self.coordinator.data.get(
+            "precipitation_probability", 0
+        )
         attrs["temperature_unit"] = "°C"
         attrs["precipitation_unit"] = "mm"
         attrs["short_forecast"] = self.coordinator.data.get("short_forecast")
@@ -93,21 +127,18 @@ class IdokepWeatherEntity(IdokepEntity, WeatherEntity):
 
     async def async_forecast_hourly(self) -> list[Forecast]:
         """Return the hourly forecast."""
-        return self.coordinator.data.get("forecast", [])
+        return self.coordinator.data.get("hourly_forecast", [])
 
     async def async_forecast_daily(self) -> list[Forecast]:
-        """Return the daily forecast in the format expected by Home Assistant UI."""
+        """Return the daily forecast."""
         return self.coordinator.data.get("daily_forecast", [])
 
 
 async def async_setup_entry(
-    hass: HomeAssistant,  # noqa: ARG001 Unused function argument: `hass`
+    _hass: HomeAssistant,
     entry: IdokepConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the weather entity."""
-    _LOGGER.debug("Setting up Időkép weather entity")
     weather_entity = IdokepWeatherEntity(entry.runtime_data.coordinator)
-    _LOGGER.debug("Created weather entity with unique_id: %s", weather_entity.unique_id)
     async_add_entities([weather_entity])
-    _LOGGER.debug("Added weather entity to Home Assistant")
