@@ -15,6 +15,12 @@ ignore = [
     "ISC001", # incompatible with formatter
 ]
 
+[lint.per-file-ignores]
+"tests/*" = ["S101", "SLF001"]  # Allow assert and private access in tests
+"check.py" = ["T201", "S603", "BLE001", "PLR0912", "PLR0915"]  # Allow prints, subprocess, broad exceptions, and complexity in test runner
+"fast_test.py" = ["T201", "S603", "BLE001", "PLR0912", "PLR0915"]  # Allow prints, subprocess, broad exceptions, and complexity in test runner
+"run_tests.py" = ["T201", "S603", "BLE001", "PLR0912", "PLR0915"]  # Allow prints, subprocess, broad exceptions, and complexity in test runner
+
 [lint.flake8-pytest-style]
 fixture-parentheses = false
 
