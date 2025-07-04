@@ -185,6 +185,15 @@ class IdokepApiClient:
                 if short_forecast:
                     result["short_forecast"] = short_forecast
 
+                # Extract current precipitation data
+                precipitation_data = self._extract_current_precipitation(soup)
+                if precipitation_data:
+                    result["precipitation"] = precipitation_data.get("precipitation", 0)
+                    result["precipitation_probability"] = precipitation_data.get(
+                        "precipitation_probability", 0
+                    )
+                    LOGGER.debug("Precipitation data: %s", precipitation_data)
+
         except (aiohttp.ClientError, TimeoutError, socket.gaierror) as exc:
             LOGGER.error("Error scraping current weather: %s", exc)
         return result
@@ -256,6 +265,51 @@ class IdokepApiClient:
                     return text
         return None
 
+    def _extract_hourly_precipitation_data(self, card: Tag) -> tuple[int, int]:
+        """Extract precipitation probability and amount from hourly forecast card."""
+        precipitation_probability = 0
+        precipitation = 0
+
+        # Extract precipitation probability
+        rain_chance_div = card.find("div", class_="ik hourly-rain-chance")
+        if rain_chance_div and isinstance(rain_chance_div, Tag):
+            rain_a = rain_chance_div.find("a")
+            if rain_a and isinstance(rain_a, Tag):
+                rain_text = rain_a.text.strip()
+                if rain_text.endswith("%"):
+                    try:
+                        precipitation_probability = int(rain_text[:-1])
+                    except ValueError:
+                        precipitation_probability = 0
+
+        # Extract precipitation amount (from rainlevel classes)
+        rainlevel_pattern = re.compile(r"ik rainlevel-\d+")
+        rainlevel_divs = card.find_all("div", class_=rainlevel_pattern)
+        if rainlevel_divs:
+            for rainlevel_div in rainlevel_divs:
+                if isinstance(rainlevel_div, Tag):
+                    class_attr = rainlevel_div.get("class")
+                    if class_attr:
+                        class_list = (
+                            class_attr if isinstance(class_attr, list) else [class_attr]
+                        )
+                        for class_name in class_list:
+                            if isinstance(class_name, str) and class_name.startswith(
+                                "rainlevel-"
+                            ):
+                                try:
+                                    # Extract number from rainlevel-X class
+                                    precip_match = re.search(
+                                        r"rainlevel-(\d+)", class_name
+                                    )
+                                    if precip_match:
+                                        precipitation = int(precip_match.group(1))
+                                        break
+                                except ValueError:
+                                    continue
+
+        return precipitation, precipitation_probability
+
     async def _scrape_hourly_forecast(self, forecast_url: str) -> dict:
         result = {}
         try:
@@ -294,6 +348,11 @@ class IdokepApiClient:
                             if isinstance(condition_val, str):
                                 condition = self._map_condition(condition_val)
 
+                    # Extract precipitation data
+                    precipitation, precipitation_probability = (
+                        self._extract_hourly_precipitation_data(card)
+                    )
+
                     if (
                         hour_div
                         and temp_div
@@ -324,10 +383,12 @@ class IdokepApiClient:
                             "datetime": dt_iso,
                             "temperature": temp,
                             "condition": condition,
+                            "precipitation": precipitation,
+                            "precipitation_probability": precipitation_probability,
                         }
                         forecast.append(forecast_item)
                 if forecast:
-                    result["forecast"] = forecast[:24]
+                    result["hourly_forecast"] = forecast[:24]
         except (aiohttp.ClientError, TimeoutError, socket.gaierror) as exc:
             LOGGER.error("Error scraping hourly forecast: %s", exc)
         return result
@@ -380,6 +441,34 @@ class IdokepApiClient:
                     return int(match.group(1))
         return 0
 
+    def _extract_daily_precipitation_probability(self, col: Tag) -> int:
+        """Extract precipitation probability from daily forecast column."""
+        # Look for percentage values in various elements
+        for element in col.find_all(["span", "div", "a"], string=re.compile(r"\d+%")):
+            if isinstance(element, Tag):
+                percent_text = element.text.strip()
+                if percent_text.endswith("%"):
+                    try:
+                        return int(percent_text[:-1])
+                    except ValueError:
+                        continue
+
+        # Look for data attributes containing precipitation probability
+        for element in col.find_all(["a", "div"], attrs={"data-bs-content": True}):
+            if isinstance(element, Tag):
+                content = element.get("data-bs-content")
+                if isinstance(content, str) and (
+                    "csapadék" in content.lower() or "precipitation" in content.lower()
+                ):
+                    percent_match = re.search(r"(\d+)%", content)
+                    if percent_match:
+                        try:
+                            return int(percent_match.group(1))
+                        except ValueError:
+                            continue
+
+        return 0
+
     async def _scrape_daily_forecast(self, daily_url: str) -> dict:
         result = {}
         try:
@@ -404,6 +493,9 @@ class IdokepApiClient:
                     max_temp = self._extract_daily_temperature(col, "ik max")
                     condition = self._extract_daily_condition(col)
                     precipitation = self._extract_daily_precipitation(col)
+                    precipitation_probability = (
+                        self._extract_daily_precipitation_probability(col)
+                    )
 
                     daily_forecast.append(
                         {
@@ -412,10 +504,42 @@ class IdokepApiClient:
                             "templow": min_temp,
                             "condition": condition,
                             "precipitation": precipitation,
+                            "precipitation_probability": precipitation_probability,
                         }
                     )
                 if daily_forecast:
                     result["daily_forecast"] = daily_forecast
         except (aiohttp.ClientError, TimeoutError, socket.gaierror) as exc:
             LOGGER.error("Error scraping 30-napos Idokep: %s", exc)
+        return result
+
+    def _extract_current_precipitation(self, soup: BeautifulSoup) -> dict:
+        """Extract current precipitation data from the main weather page."""
+        result = {"precipitation": 0, "precipitation_probability": 0}
+
+        # Look for precipitation probability in various locations
+        for element in soup.find_all(["div", "span"], string=re.compile(r"\d+%")):
+            if isinstance(element, Tag):
+                parent = element.parent
+                if parent and isinstance(parent, Tag):
+                    parent_text = parent.get_text().lower()
+                    if any(
+                        keyword in parent_text
+                        for keyword in ["csapadék", "eső", "precipitation"]
+                    ):
+                        percent_match = re.search(r"(\d+)%", element.text)
+                        if percent_match:
+                            result["precipitation_probability"] = int(
+                                percent_match.group(1)
+                            )
+                            break
+
+        # Look for precipitation amount indicators
+        for element in soup.find_all(["div", "span"], string=re.compile(r"\d+\s*mm")):
+            if isinstance(element, Tag):
+                mm_match = re.search(r"(\d+)\s*mm", element.text)
+                if mm_match:
+                    result["precipitation"] = int(mm_match.group(1))
+                    break
+
         return result
