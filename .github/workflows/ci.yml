@@ -101,7 +101,7 @@ jobs:
 
       - name: Upload coverage
         if: matrix.python-version == '3.13'
-        uses: codecov/codecov-action@4be0c2c9653b7b5b43bdb4a3ab14ee46c0d2e71a # v5.0.9
+        uses: codecov/codecov-action@v4
         with:
           file: ./coverage.xml
           flags: ci-comprehensive
