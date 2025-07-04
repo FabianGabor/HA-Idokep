@@ -17,5 +17,27 @@
         "abort": {
             "already_configured": "This entry is already configured."
         }
+    },
+    "entity": {
+        "sensor": {
+            "temperature": {
+                "name": "Temperature"
+            },
+            "condition": {
+                "name": "Weather Condition"
+            },
+            "condition_hu": {
+                "name": "Weather Condition (Hungarian)"
+            },
+            "sunrise": {
+                "name": "Sunrise"
+            },
+            "sunset": {
+                "name": "Sunset"
+            },
+            "short_forecast": {
+                "name": "Short Forecast"
+            }
+        }
     }
 }

@@ -11,6 +11,7 @@ from homeassistant.components.weather import (
     WeatherEntity,
 )
 from homeassistant.components.weather.const import WeatherEntityFeature
+from homeassistant.helpers.device_registry import DeviceInfo
 
 from .const import DOMAIN, NAME
 from .entity import IdokepEntity
@@ -72,6 +73,16 @@ class IdokepWeatherEntity(IdokepEntity, WeatherEntity):
             "Initialized weather entity with unique_id: %s for location: %s",
             self._attr_unique_id,
             location,
+        )
+
+        self._attr_device_info = DeviceInfo(
+            identifiers={
+                (
+                    coordinator.config_entry.domain,
+                    f"{coordinator.config_entry.entry_id}_{sanitized_location}",
+                ),
+            },
+            name=f"Időkép {location}",
         )
 
     @property
