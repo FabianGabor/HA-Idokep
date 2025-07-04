@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import datetime
 import re
 import socket
@@ -52,22 +53,6 @@ class IdokepApiClient:
         """Initialize the API client."""
         self._session = session
 
-    async def async_get_data(self) -> Any:
-        """Get data from the API."""
-        return await self._api_wrapper(
-            method="get",
-            url="https://jsonplaceholder.typicode.com/posts/1",
-        )
-
-    async def async_set_title(self, value: str) -> Any:
-        """Get data from the API."""
-        return await self._api_wrapper(
-            method="patch",
-            url="https://jsonplaceholder.typicode.com/posts/1",
-            data={"title": value},
-            headers={"Content-type": "application/json; charset=UTF-8"},
-        )
-
     async def _api_wrapper(
         self,
         method: str,
@@ -77,7 +62,7 @@ class IdokepApiClient:
     ) -> Any:
         """Get information from the API."""
         try:
-            async with async_timeout.timeout(10):
+            async with async_timeout.timeout(5):
                 response = await self._session.request(
                     method=method,
                     url=url,
@@ -142,10 +127,23 @@ class IdokepApiClient:
         forecast_url = f"https://www.idokep.hu/elorejelzes/{location}"
         daily_url = f"https://www.idokep.hu/30napos/{location}"
         data = {}
+
         try:
-            data.update(await self._scrape_current_weather(url))
-            data.update(await self._scrape_hourly_forecast(forecast_url))
-            data.update(await self._scrape_daily_forecast(daily_url))
+            # Make all requests concurrently to reduce total time
+            results = await asyncio.gather(
+                self._scrape_current_weather(url),
+                self._scrape_hourly_forecast(forecast_url),
+                self._scrape_daily_forecast(daily_url),
+                return_exceptions=True,
+            )
+
+            # Process results, skipping any that failed
+            for result in results:
+                if isinstance(result, dict):
+                    data.update(result)
+                elif isinstance(result, Exception):
+                    LOGGER.warning("Failed to scrape some weather data: %s", result)
+
         except (aiohttp.ClientError, TimeoutError, socket.gaierror) as exc:
             LOGGER.error("Error scraping Idokep: %s", exc)
         return data
@@ -153,27 +151,29 @@ class IdokepApiClient:
     async def _scrape_current_weather(self, url: str) -> dict:
         result = {}
         try:
-            async with async_timeout.timeout(10), self._session.get(url) as response:
+            async with async_timeout.timeout(5), self._session.get(url) as response:
                 response.raise_for_status()
                 html = await response.text()
                 soup = BeautifulSoup(html, "html.parser")
 
-                # Temperature
+                # Find all ik elements at once to reduce DOM traversal
                 temp_div = soup.find("div", class_="ik current-temperature")
+                cond_div = soup.find("div", class_="ik current-weather")
+                title_div = soup.find("div", class_="ik current-weather-title")
+
+                # Temperature
                 if isinstance(temp_div, Tag):
                     match = re.search(r"(-?\d+)[^\d]*C", temp_div.text)
                     if match:
                         result["temperature"] = int(match.group(1))
 
                 # Weather condition
-                cond_div = soup.find("div", class_="ik current-weather")
                 if isinstance(cond_div, Tag):
                     condition = cond_div.text.strip()
                     result["condition"] = self._map_condition(condition)
                     result["condition_hu"] = condition
 
                 # Weather title (e.g., 'Jelenleg')
-                title_div = soup.find("div", class_="ik current-weather-title")
                 if isinstance(title_div, Tag):
                     result["weather_title"] = title_div.text.strip()
 
@@ -260,7 +260,7 @@ class IdokepApiClient:
         result = {}
         try:
             async with (
-                async_timeout.timeout(10),
+                async_timeout.timeout(5),
                 self._session.get(forecast_url) as response,
             ):
                 response.raise_for_status()
@@ -271,37 +271,29 @@ class IdokepApiClient:
                 now = datetime.datetime.now(tz=datetime.UTC)
                 current_hour = now.hour
                 current_date = now.date()
+
+                # Find all hourly cards at once
                 hourly_cards = soup.find_all(
                     "div", class_="ik new-hourly-forecast-card"
                 )
+
                 for card in hourly_cards:
                     if not isinstance(card, Tag):
                         continue
-                    hour_div = (
-                        card.find("div", class_="ik new-hourly-forecast-hour")
-                        if isinstance(card, Tag)
-                        else None
-                    )
-                    temp_div = (
-                        card.find("div", class_="ik tempValue")
-                        if isinstance(card, Tag)
-                        else None
-                    )
-                    icon_container = (
-                        card.find("div", class_="forecast-icon-container")
-                        if isinstance(card, Tag)
-                        else None
-                    )
-                    icon_a = (
-                        icon_container.find("a")
-                        if icon_container and isinstance(icon_container, Tag)
-                        else None
-                    )
+
+                    # Find all child elements at once to minimize DOM traversal
+                    hour_div = card.find("div", class_="ik new-hourly-forecast-hour")
+                    temp_div = card.find("div", class_="ik tempValue")
+                    icon_container = card.find("div", class_="forecast-icon-container")
+
                     condition = None
-                    if icon_a and isinstance(icon_a, Tag):
-                        condition_val = icon_a.get("data-bs-content")
-                        if isinstance(condition_val, str):
-                            condition = self._map_condition(condition_val)
+                    if icon_container and isinstance(icon_container, Tag):
+                        icon_a = icon_container.find("a")
+                        if icon_a and isinstance(icon_a, Tag):
+                            condition_val = icon_a.get("data-bs-content")
+                            if isinstance(condition_val, str):
+                                condition = self._map_condition(condition_val)
+
                     if (
                         hour_div
                         and temp_div
@@ -340,50 +332,59 @@ class IdokepApiClient:
             LOGGER.error("Error scraping hourly forecast: %s", exc)
         return result
 
+    def _extract_daily_temperature(self, col: Tag, class_name: str) -> int | None:
+        """Extract temperature from daily forecast column."""
+        temp_div = col.find("div", class_=class_name)
+        if temp_div and isinstance(temp_div, Tag):
+            temp_a = temp_div.find("a")
+            if temp_a and isinstance(temp_a, Tag):
+                match = re.search(r"(-?\d+)", temp_a.text)
+                if match:
+                    return int(match.group(1))
+        return None
+
+    def _extract_daily_condition(self, col: Tag) -> str | None:
+        """Extract weather condition from daily forecast column."""
+        icon_alert = col.find("div", class_="ik dfIconAlert")
+        if not (icon_alert and isinstance(icon_alert, Tag)):
+            return None
+
+        a_tag = icon_alert.find("a")
+        if not (a_tag and isinstance(a_tag, Tag)):
+            return None
+
+        popover = a_tag.get("data-bs-content")
+        if not isinstance(popover, str):
+            return None
+
+        # Try detailed match first
+        match = re.search(r"popover-icon' src='[^']+'>([^<]+)<", popover)
+        if match:
+            return self._map_condition(match.group(1).strip())
+
+        # Try simpler match as fallback
+        text_match = re.search(r"popover-icon' src='[^']+'>([^<]+)", popover)
+        if text_match:
+            return self._map_condition(text_match.group(1).strip())
+
+        return None
+
+    def _extract_daily_precipitation(self, col: Tag) -> int:
+        """Extract precipitation from daily forecast column."""
+        precip_span = col.find("span", class_="ik mm")
+        if precip_span and isinstance(precip_span, Tag):
+            precip_text = precip_span.text.strip()
+            if precip_text:
+                match = re.search(r"(\d+)", precip_text)
+                if match:
+                    return int(match.group(1))
+        return 0
+
     async def _scrape_daily_forecast(self, daily_url: str) -> dict:
-        def extract_temp(div: Tag, class_name: str) -> int | None:
-            temp_div = div.find("div", class_=class_name)
-            if temp_div and isinstance(temp_div, Tag):
-                temp_a = temp_div.find("a")
-                if temp_a and isinstance(temp_a, Tag):
-                    match = re.search(r"(-?\d+)", temp_a.text)
-                    if match:
-                        return int(match.group(1))
-            return None
-
-        def extract_condition(col: Tag) -> str | None:
-            icon_alert = col.find("div", class_="ik dfIconAlert")
-            if icon_alert and isinstance(icon_alert, Tag):
-                a_tag = icon_alert.find("a")
-                if a_tag and isinstance(a_tag, Tag):
-                    popover = a_tag.get("data-bs-content")
-                    if isinstance(popover, str):
-                        match = re.search(
-                            r"popover-icon' src='[^']+'>([^<]+)<", popover
-                        )
-                        if match:
-                            return self._map_condition(match.group(1).strip())
-                        text_match = re.search(
-                            r"popover-icon' src='[^']+'>([^<]+)", popover
-                        )
-                        if text_match:
-                            return self._map_condition(text_match.group(1).strip())
-            return None
-
-        def extract_precipitation(col: Tag) -> int:
-            precip_span = col.find("span", class_="ik mm")
-            if precip_span and isinstance(precip_span, Tag):
-                precip_text = precip_span.text.strip()
-                if precip_text:
-                    match = re.search(r"(\d+)", precip_text)
-                    if match:
-                        return int(match.group(1))
-            return 0
-
         result = {}
         try:
             async with (
-                async_timeout.timeout(10),
+                async_timeout.timeout(5),
                 self._session.get(daily_url) as response,
             ):
                 response.raise_for_status()
@@ -393,14 +394,16 @@ class IdokepApiClient:
                 daily_forecast = []
                 daily_cols = soup.find_all("div", class_="ik dailyForecastCol")
                 today = datetime.datetime.now(tz=datetime.UTC).date()
+
                 for i, col in enumerate(daily_cols):
                     if not isinstance(col, Tag):
                         continue
+
                     forecast_date = today + datetime.timedelta(days=i)
-                    min_temp = extract_temp(col, "ik min")
-                    max_temp = extract_temp(col, "ik max")
-                    condition = extract_condition(col)
-                    precipitation = extract_precipitation(col)
+                    min_temp = self._extract_daily_temperature(col, "ik min")
+                    max_temp = self._extract_daily_temperature(col, "ik max")
+                    condition = self._extract_daily_condition(col)
+                    precipitation = self._extract_daily_precipitation(col)
 
                     daily_forecast.append(
                         {
