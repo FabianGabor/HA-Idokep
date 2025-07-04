@@ -2,11 +2,14 @@
     "domain": "idokep",
     "name": "Időkép",
     "codeowners": [
-        "@ludeeus"
+        "@FabianGabor"
     ],
     "config_flow": true,
-    "documentation": "https://github.com/ludeeus/integration_blueprint",
+    "documentation": "https://github.com/FabianGabor/HA-Idokep",
     "iot_class": "cloud_polling",
-    "issue_tracker": "https://github.com/ludeeus/integration_blueprint/issues",
-    "version": "0.1.0"
+    "issue_tracker": "https://github.com/FabianGabor/HA-Idokep/issues",
+    "version": "0.1.0",
+    "translations": [
+        "translations/hu.json"
+    ]
 }

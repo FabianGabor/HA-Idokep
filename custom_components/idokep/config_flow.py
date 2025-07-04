@@ -73,6 +73,5 @@ class IdokepFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             session=async_create_clientsession(self.hass),
         )
         data = await client.async_get_weather_data(location)
-        LOGGER.debug("Idokep scraped data for location '%s': %s", location, data)
         if not data or "temperature" not in data:
             raise WeatherDataFetchError(location)

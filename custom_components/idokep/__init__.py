@@ -41,6 +41,7 @@ async def async_setup_entry(
         logger=LOGGER,
         name=DOMAIN,
         update_interval=timedelta(minutes=15),
+        config_entry=entry,
     )
     entry.runtime_data = IdokepData(
         client=IdokepApiClient(

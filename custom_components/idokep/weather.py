@@ -1,18 +1,16 @@
 """Időkép Weather Entity for Home Assistant."""
 
-from collections.abc import Callable
-from typing import Any
-
 from homeassistant.components.weather import (
     Forecast,
     WeatherEntity,
 )
 from homeassistant.components.weather.const import WeatherEntityFeature
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN, NAME
 from .coordinator import IdokepDataUpdateCoordinator
+from .data import IdokepConfigEntry
 from .entity import IdokepEntity
 
 
@@ -73,9 +71,9 @@ class IdokepWeatherEntity(IdokepEntity, WeatherEntity):
 
 
 async def async_setup_entry(
-    _hass: HomeAssistant,
-    entry: ConfigEntry,
-    async_add_entities: Callable[[list[Any]], None],
+    hass: HomeAssistant,  # noqa: ARG001 Unused function argument: `hass`
+    entry: IdokepConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the weather entity."""
     async_add_entities([IdokepWeatherEntity(entry.runtime_data.coordinator)])

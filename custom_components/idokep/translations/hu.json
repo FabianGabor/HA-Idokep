@@ -1,0 +1,24 @@
+{
+    "entity": {
+        "sensor": {
+            "temperature": {
+                "name": "Hőmérséklet"
+            },
+            "condition": {
+                "name": "Időjárási állapot"
+            },
+            "condition_hu": {
+                "name": "Időjárási állapot hu"
+            },
+            "sunrise": {
+                "name": "Napkelte"
+            },
+            "sunset": {
+                "name": "Napnyugta"
+            },
+            "short_forecast": {
+                "name": "Rövid előrejelzés"
+            }
+        }
+    }
+}

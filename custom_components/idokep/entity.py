@@ -17,7 +17,6 @@ class IdokepEntity(CoordinatorEntity[IdokepDataUpdateCoordinator]):
     def __init__(self, coordinator: IdokepDataUpdateCoordinator) -> None:
         """Initialize."""
         super().__init__(coordinator)
-        self._attr_unique_id = coordinator.config_entry.entry_id
         self._attr_device_info = DeviceInfo(
             identifiers={
                 (
@@ -25,4 +24,5 @@ class IdokepEntity(CoordinatorEntity[IdokepDataUpdateCoordinator]):
                     coordinator.config_entry.entry_id,
                 ),
             },
+            name="Időkép",  # Add device name
         )
