@@ -11,6 +11,11 @@ import aiohttp
 import async_timeout
 from bs4 import BeautifulSoup, Tag
 
+try:
+    import zoneinfo
+except ImportError:
+    zoneinfo = None
+
 from .const import LOGGER
 
 
@@ -165,6 +170,7 @@ class IdokepApiClient:
                 if isinstance(cond_div, Tag):
                     condition = cond_div.text.strip()
                     result["condition"] = self._map_condition(condition)
+                    result["condition_hu"] = condition
 
                 # Weather title (e.g., 'Jelenleg')
                 title_div = soup.find("div", class_="ik current-weather-title")
@@ -200,14 +206,25 @@ class IdokepApiClient:
                 dt = datetime.datetime.combine(
                     today, datetime.time(hour, minute, tzinfo=local_tz)
                 )
+                LOGGER.debug(
+                    "Extracted %s time: %s. Timezone: %s",
+                    label,
+                    dt.isoformat(),
+                    local_tz,
+                )
                 return dt.isoformat()
         return None
 
     def _parse_sunrise_sunset(self, soup: BeautifulSoup) -> dict:
         """Extract sunrise and sunset times from the soup."""
+        local_tz = (
+            zoneinfo.ZoneInfo("Europe/Budapest")
+            if zoneinfo is not None
+            else datetime.timezone(datetime.timedelta(hours=2))
+        )
+        today = datetime.datetime.now(tz=local_tz).date()
         result = {}
-        today = datetime.datetime.now(tz=datetime.UTC).date()
-        local_tz = datetime.datetime.now().astimezone().tzinfo or datetime.UTC
+
         for div in soup.find_all("div"):
             if not isinstance(div, Tag):
                 continue

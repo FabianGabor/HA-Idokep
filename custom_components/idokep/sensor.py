@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 ENTITY_DESCRIPTIONS = (
     SensorEntityDescription(
         key="temperature",
-        name="Current Temperature",
+        translation_key="temperature",
         icon="mdi:thermometer",
         native_unit_of_measurement="°C",
         device_class=SensorDeviceClass.TEMPERATURE,
@@ -31,24 +31,29 @@ ENTITY_DESCRIPTIONS = (
     ),
     SensorEntityDescription(
         key="condition",
-        name="Current Weather Condition",
+        translation_key="condition",
+        icon="mdi:weather-partly-cloudy",
+    ),
+    SensorEntityDescription(
+        key="condition_hu",
+        translation_key="condition_hu",
         icon="mdi:weather-partly-cloudy",
     ),
     SensorEntityDescription(
         key="sunrise",
-        name="Sunrise",
+        translation_key="sunrise",
         icon="mdi:weather-sunset-up",
         device_class=SensorDeviceClass.TIMESTAMP,
     ),
     SensorEntityDescription(
         key="sunset",
-        name="Sunset",
+        translation_key="sunset",
         icon="mdi:weather-sunset-down",
         device_class=SensorDeviceClass.TIMESTAMP,
     ),
     SensorEntityDescription(
         key="short_forecast",
-        name="Short Forecast",
+        translation_key="short_forecast",
         icon="mdi:weather-cloudy-clock",
     ),
 )
@@ -71,6 +76,11 @@ async def async_setup_entry(
 
 class IdokepSensor(IdokepEntity, SensorEntity):
     """Idokep Sensor class."""
+
+    @property
+    def has_entity_name(self) -> bool:
+        """Return True if the entity has a name."""
+        return True
 
     def __init__(
         self,

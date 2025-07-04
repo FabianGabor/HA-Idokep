@@ -7,6 +7,11 @@ from typing import TYPE_CHECKING
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 if TYPE_CHECKING:
+    from datetime import timedelta
+    from logging import Logger
+
+    from homeassistant.core import HomeAssistant
+
     from .data import IdokepConfigEntry
 
 
@@ -24,6 +29,20 @@ class IdokepDataUpdateCoordinator(DataUpdateCoordinator):
 
     config_entry: IdokepConfigEntry
 
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        logger: Logger,
+        name: str,
+        update_interval: timedelta,
+        config_entry: IdokepConfigEntry,
+    ) -> None:
+        """Initialize the data update coordinator."""
+        super().__init__(
+            hass, logger=logger, name=name, update_interval=update_interval
+        )
+        self.config_entry = config_entry
+
     async def _async_update_data(self) -> dict:
         """Update data via library."""
         location = self.config_entry.data["location"]
@@ -34,6 +53,7 @@ class IdokepDataUpdateCoordinator(DataUpdateCoordinator):
         return data
 
     async def _fetch_weather_data(self, location: str) -> dict:
+        """Fetch weather data for a given location."""
         data = await self.config_entry.runtime_data.client.async_get_weather_data(
             location
         )
