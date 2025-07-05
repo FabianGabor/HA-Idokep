@@ -26,6 +26,10 @@ class IdokepFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    def is_matching(self, _other_flow: config_entries.ConfigFlow) -> bool:
+        """Return True if config flows match."""
+        return False
+
     async def async_step_user(
         self,
         user_input: dict | None = None,

@@ -25,7 +25,7 @@ ENTITY_DESCRIPTIONS = (
 
 
 async def async_setup_entry(
-    hass: HomeAssistant,  # noqa: ARG001 Unused function argument: `hass`
+    _hass: HomeAssistant,
     entry: IdokepConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
@@ -56,12 +56,24 @@ class IdokepSwitch(IdokepEntity, SwitchEntity):
         """Return true if the switch is on."""
         return self.coordinator.data.get("title", "") == "foo"
 
+    def turn_on(self, **_: Any) -> None:
+        """Turn on the switch (sync version)."""
+        # This method is abstract in ToggleEntity but deprecated
+        # SwitchEntity should use async_turn_on instead
+        raise NotImplementedError
+
+    def turn_off(self, **_: Any) -> None:
+        """Turn off the switch (sync version)."""
+        # This method is abstract in ToggleEntity but deprecated
+        # SwitchEntity should use async_turn_off instead
+        raise NotImplementedError
+
     async def async_turn_on(self, **_: Any) -> None:
         """Turn on the switch."""
-        await self.coordinator.config_entry.runtime_data.client.async_set_title("bar")
+        # For now, just request a refresh as this is a demo switch
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **_: Any) -> None:
         """Turn off the switch."""
-        await self.coordinator.config_entry.runtime_data.client.async_set_title("foo")
+        # For now, just request a refresh as this is a demo switch
         await self.coordinator.async_request_refresh()

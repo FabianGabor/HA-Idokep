@@ -13,9 +13,6 @@ if TYPE_CHECKING:
     from .coordinator import IdokepDataUpdateCoordinator
 
 
-type IdokepConfigEntry = ConfigEntry[IdokepData]
-
-
 @dataclass
 class IdokepData:
     """Data for the Idokep integration."""
@@ -23,3 +20,8 @@ class IdokepData:
     client: IdokepApiClient
     coordinator: IdokepDataUpdateCoordinator
     integration: Integration
+
+
+# Type alias for config entry with IdokepData
+if TYPE_CHECKING:
+    IdokepConfigEntry = ConfigEntry[IdokepData]

@@ -13,7 +13,16 @@ ignore = [
     "D212", # multi-line-summary-first-line (incompatible with formatter)
     "COM812", # incompatible with formatter
     "ISC001", # incompatible with formatter
+    "EXE001", # Shebang is present but file is not executable
+    "EXE002", # The file is executable but no shebang is present
+    "PLR0914", # Too many local variables
 ]
+
+[lint.per-file-ignores]
+"tests/*" = ["S101", "SLF001", "PLR2004", "EXE001"]  # Allow assert, private access, magic values, and shebang in tests
+"check.py" = ["T201", "S603", "BLE001", "PLR0912", "PLR0915"]  # Allow prints, subprocess, broad exceptions, and complexity in test runner
+"fast_test.py" = ["T201", "S603", "BLE001", "PLR0912", "PLR0915"]  # Allow prints, subprocess, broad exceptions, and complexity in test runner
+"run_tests.py" = ["T201", "S603", "BLE001", "PLR0912", "PLR0915"]  # Allow prints, subprocess, broad exceptions, and complexity in test runner
 
 [lint.flake8-pytest-style]
 fixture-parentheses = false

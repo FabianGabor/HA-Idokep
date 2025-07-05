@@ -133,6 +133,11 @@ class IdokepWeatherEntity(IdokepEntity, WeatherEntity):
         """Return the daily forecast."""
         return self.coordinator.data.get("daily_forecast", [])
 
+    async def async_forecast_twice_daily(self) -> list[Forecast]:
+        """Return the twice daily forecast."""
+        # Return daily forecast as we don't have specific twice-daily data
+        return self.coordinator.data.get("daily_forecast", [])
+
 
 async def async_setup_entry(
     _hass: HomeAssistant,

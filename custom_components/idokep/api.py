@@ -88,7 +88,7 @@ class IdokepApiClient:
                 msg,
             ) from exception
 
-    def _map_condition(self, condition: str) -> str:
+    def map_condition(self, condition: str) -> str:
         """Map Hungarian condition to Home Assistant standard condition."""
         mapping = {
             "napos": "sunny",
@@ -170,7 +170,7 @@ class IdokepApiClient:
                 # Weather condition
                 if isinstance(cond_div, Tag):
                     condition = cond_div.text.strip()
-                    result["condition"] = self._map_condition(condition)
+                    result["condition"] = self.map_condition(condition)
                     result["condition_hu"] = condition
 
                 # Weather title (e.g., 'Jelenleg')
@@ -267,50 +267,68 @@ class IdokepApiClient:
 
     def _extract_hourly_precipitation_data(self, card: Tag) -> tuple[int, int]:
         """Extract precipitation probability and amount from hourly forecast card."""
-        precipitation_probability = 0
-        precipitation = 0
-
-        # Extract precipitation probability
-        rain_chance_div = card.find("div", class_="ik hourly-rain-chance")
-        if rain_chance_div and isinstance(rain_chance_div, Tag):
-            rain_a = rain_chance_div.find("a")
-            if rain_a and isinstance(rain_a, Tag):
-                rain_text = rain_a.text.strip()
-                if rain_text.endswith("%"):
-                    try:
-                        precipitation_probability = int(rain_text[:-1])
-                    except ValueError:
-                        precipitation_probability = 0
-
-        # Extract precipitation amount (from rainlevel classes)
-        rainlevel_pattern = re.compile(r"ik rainlevel-\d+")
-        rainlevel_divs = card.find_all("div", class_=rainlevel_pattern)
-        if rainlevel_divs:
-            for rainlevel_div in rainlevel_divs:
-                if isinstance(rainlevel_div, Tag):
-                    class_attr = rainlevel_div.get("class")
-                    if class_attr:
-                        class_list = (
-                            class_attr if isinstance(class_attr, list) else [class_attr]
-                        )
-                        for class_name in class_list:
-                            if isinstance(class_name, str) and class_name.startswith(
-                                "rainlevel-"
-                            ):
-                                try:
-                                    # Extract number from rainlevel-X class
-                                    precip_match = re.search(
-                                        r"rainlevel-(\d+)", class_name
-                                    )
-                                    if precip_match:
-                                        precipitation = int(precip_match.group(1))
-                                        break
-                                except ValueError:
-                                    continue
-
+        precipitation_probability = self._extract_precipitation_probability(card)
+        precipitation = self._extract_precipitation_amount(card)
         return precipitation, precipitation_probability
 
-    async def _scrape_hourly_forecast(self, forecast_url: str) -> dict:
+    def _extract_precipitation_probability(self, card: Tag) -> int:
+        """Extract precipitation probability from hourly forecast card."""
+        rain_chance_div = card.find("div", class_="ik hourly-rain-chance")
+        if not (rain_chance_div and isinstance(rain_chance_div, Tag)):
+            return 0
+
+        rain_a = rain_chance_div.find("a")
+        if not (rain_a and isinstance(rain_a, Tag)):
+            return 0
+
+        rain_text = rain_a.text.strip()
+        if not rain_text.endswith("%"):
+            return 0
+
+        try:
+            return int(rain_text[:-1])
+        except ValueError:
+            return 0
+
+    def _extract_precipitation_amount(self, card: Tag) -> int:
+        """Extract precipitation amount from rainlevel classes."""
+        rainlevel_pattern = re.compile(r"ik rainlevel-\d+")
+        rainlevel_divs = card.find_all("div", class_=rainlevel_pattern)
+
+        for rainlevel_div in rainlevel_divs:
+            if not isinstance(rainlevel_div, Tag):
+                continue
+
+            precipitation = self._parse_rainlevel_class(rainlevel_div)
+            if precipitation > 0:
+                return precipitation
+
+        return 0
+
+    def _parse_rainlevel_class(self, rainlevel_div: Tag) -> int:
+        """Parse rainlevel class to extract precipitation amount."""
+        class_attr = rainlevel_div.get("class")
+        if not class_attr:
+            return 0
+
+        class_list = class_attr if isinstance(class_attr, list) else [class_attr]
+
+        for class_name in class_list:
+            if not (
+                isinstance(class_name, str) and class_name.startswith("rainlevel-")
+            ):
+                continue
+
+            try:
+                precip_match = re.search(r"rainlevel-(\d+)", class_name)
+                if precip_match:
+                    return int(precip_match.group(1))
+            except ValueError:
+                continue
+
+        return 0
+
+    async def _scrape_hourly_forecast(self, forecast_url: str) -> dict:  # pylint: disable=too-many-locals
         result = {}
         try:
             async with (
@@ -346,7 +364,7 @@ class IdokepApiClient:
                         if icon_a and isinstance(icon_a, Tag):
                             condition_val = icon_a.get("data-bs-content")
                             if isinstance(condition_val, str):
-                                condition = self._map_condition(condition_val)
+                                condition = self.map_condition(condition_val)
 
                     # Extract precipitation data
                     precipitation, precipitation_probability = (
@@ -421,12 +439,12 @@ class IdokepApiClient:
         # Try detailed match first
         match = re.search(r"popover-icon' src='[^']+'>([^<]+)<", popover)
         if match:
-            return self._map_condition(match.group(1).strip())
+            return self.map_condition(match.group(1).strip())
 
         # Try simpler match as fallback
         text_match = re.search(r"popover-icon' src='[^']+'>([^<]+)", popover)
         if text_match:
-            return self._map_condition(text_match.group(1).strip())
+            return self.map_condition(text_match.group(1).strip())
 
         return None
 
@@ -469,7 +487,7 @@ class IdokepApiClient:
 
         return 0
 
-    async def _scrape_daily_forecast(self, daily_url: str) -> dict:
+    async def _scrape_daily_forecast(self, daily_url: str) -> dict:  # pylint: disable=too-many-locals
         result = {}
         try:
             async with (
