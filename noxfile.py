@@ -42,14 +42,12 @@ def quick_test(session: nox.Session) -> None:
     """Run quick tests with minimal dependencies - no coverage."""
     # Install basic test requirements first
     session.install("-r", "test-requirements.txt")
-    session.install("aiohttp", "beautifulsoup4")
+    session.install("aiohttp", "beautifulsoup4", "homeassistant")
 
-    # Run only API tests (fastest) - skip conftest.py that imports HA
+    # Run only API tests with Home Assistant available
     session.run(
         "pytest",
         "tests/test_api.py",
-        "--confcutdir=tests",
-        "--ignore=tests/conftest.py",
         "-v",
         "--tb=short",
         *session.posargs,
