@@ -20,6 +20,7 @@ disable = [
     "duplicate-code",
     "too-many-positional-arguments",
     "too-many-public-methods",
+    "protected-access",
 ]
 
 [tool.pylint.format]
