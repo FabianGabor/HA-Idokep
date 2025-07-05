@@ -26,8 +26,6 @@ disable = [
     "too-many-positional-arguments",
     "too-many-public-methods",
 ]
-
-[tool.pylint.'messages control']
 per-file-ignores = [
     "tests/:protected-access",
 ]
