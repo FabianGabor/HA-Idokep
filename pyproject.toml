@@ -12,6 +12,11 @@ asyncio_mode = "auto"
 
 # Ruff configuration is in .ruff.toml
 
+[tool.pylint.MASTER]
+load-plugins = [
+    "pylint_per_file_ignores",
+]
+
 [tool.pylint.messages_control]
 disable = [
     "too-few-public-methods",
@@ -20,7 +25,11 @@ disable = [
     "duplicate-code",
     "too-many-positional-arguments",
     "too-many-public-methods",
-    "protected-access",
+]
+
+[tool.pylint.'messages control']
+per-file-ignores = [
+    "tests/:protected-access",
 ]
 
 [tool.pylint.format]
