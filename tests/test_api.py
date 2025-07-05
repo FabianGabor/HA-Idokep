@@ -483,12 +483,23 @@ class TestIdokepApiClientWeatherScraping:
 
         with (
             patch.object(
-                api_client, "_scrape_current_weather", return_value=current_data
+                api_client,
+                "_scrape_current_weather",
+                new_callable=AsyncMock,
+                return_value=current_data,
             ),
             patch.object(
-                api_client, "_scrape_hourly_forecast", return_value=hourly_data
+                api_client,
+                "_scrape_hourly_forecast",
+                new_callable=AsyncMock,
+                return_value=hourly_data,
             ),
-            patch.object(api_client, "_scrape_daily_forecast", return_value=daily_data),
+            patch.object(
+                api_client,
+                "_scrape_daily_forecast",
+                new_callable=AsyncMock,
+                return_value=daily_data,
+            ),
         ):
             result = await api_client.async_get_weather_data("budapest")
 
@@ -507,14 +518,23 @@ class TestIdokepApiClientWeatherScraping:
 
         with (
             patch.object(
-                api_client, "_scrape_current_weather", return_value=current_data
+                api_client,
+                "_scrape_current_weather",
+                new_callable=AsyncMock,
+                return_value=current_data,
             ),
             patch.object(
                 api_client,
                 "_scrape_hourly_forecast",
+                new_callable=AsyncMock,
                 side_effect=Exception("Network error"),
             ),
-            patch.object(api_client, "_scrape_daily_forecast", return_value={}),
+            patch.object(
+                api_client,
+                "_scrape_daily_forecast",
+                new_callable=AsyncMock,
+                return_value={},
+            ),
         ):
             result = await api_client.async_get_weather_data("budapest")
 
@@ -559,9 +579,9 @@ class TestIdokepApiClientWeatherScraping:
                 "custom_components.idokep.api.asyncio.gather",
                 side_effect=aiohttp.ClientError("Network failure"),
             ),
-            patch.object(api_client, "_scrape_current_weather"),
-            patch.object(api_client, "_scrape_hourly_forecast"),
-            patch.object(api_client, "_scrape_daily_forecast"),
+            patch.object(api_client, "_scrape_current_weather", new_callable=AsyncMock),
+            patch.object(api_client, "_scrape_hourly_forecast", new_callable=AsyncMock),
+            patch.object(api_client, "_scrape_daily_forecast", new_callable=AsyncMock),
         ):
             result = await api_client.async_get_weather_data("budapest")
 
@@ -1134,13 +1154,22 @@ class TestIdokepApiClientAdvancedScenarios:
         # Mock the scraping methods to raise different types of exceptions
         with (
             patch.object(
-                api_client, "_scrape_current_weather", side_effect=aiohttp.ClientError()
+                api_client,
+                "_scrape_current_weather",
+                new_callable=AsyncMock,
+                side_effect=aiohttp.ClientError(),
             ),
             patch.object(
-                api_client, "_scrape_hourly_forecast", side_effect=TimeoutError()
+                api_client,
+                "_scrape_hourly_forecast",
+                new_callable=AsyncMock,
+                side_effect=TimeoutError(),
             ),
             patch.object(
-                api_client, "_scrape_daily_forecast", side_effect=Exception("error")
+                api_client,
+                "_scrape_daily_forecast",
+                new_callable=AsyncMock,
+                side_effect=Exception("error"),
             ),
         ):
             result = await api_client.async_get_weather_data("budapest")
