@@ -24,7 +24,9 @@ def fast_test(session: nox.Session) -> None:
 def tests(session: nox.Session) -> None:
     """Run comprehensive tests with Home Assistant - SLOW but complete."""
     # Install all dependencies including Home Assistant
-    session.install("pytest", "pytest-asyncio", "pytest-cov", "homeassistant")
+    session.install(
+        "pytest", "pytest-asyncio", "pytest-cov", "homeassistant", "beautifulsoup4"
+    )
 
     session.run(
         "pytest",
@@ -57,7 +59,9 @@ def quick_test(session: nox.Session) -> None:
 @nox.session(name="full-test")
 def full_test(session: nox.Session) -> None:
     """Run tests with Home Assistant (SLOW - use only when needed)."""
-    session.install("pytest", "pytest-asyncio", "pytest-cov", "homeassistant")
+    session.install(
+        "pytest", "pytest-asyncio", "pytest-cov", "homeassistant", "beautifulsoup4"
+    )
     session.run(
         "pytest",
         "tests/",
