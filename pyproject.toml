@@ -18,10 +18,14 @@ disable = [
     "too-many-arguments",
     "too-many-instance-attributes",
     "duplicate-code",
+    "too-many-positional-arguments",
 ]
 
 [tool.pylint.format]
 max-line-length = 88
+
+[tool.pylint.design]
+max-args = 7
 
 [tool.coverage.run]
 source = ["custom_components"]

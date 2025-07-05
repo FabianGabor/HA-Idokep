@@ -310,7 +310,7 @@ class IdokepApiClient:
 
         return precipitation, precipitation_probability
 
-    async def _scrape_hourly_forecast(self, forecast_url: str) -> dict:
+    async def _scrape_hourly_forecast(self, forecast_url: str) -> dict:  # pylint: disable=too-many-locals
         result = {}
         try:
             async with (
@@ -469,7 +469,7 @@ class IdokepApiClient:
 
         return 0
 
-    async def _scrape_daily_forecast(self, daily_url: str) -> dict:
+    async def _scrape_daily_forecast(self, daily_url: str) -> dict:  # pylint: disable=too-many-locals
         result = {}
         try:
             async with (
