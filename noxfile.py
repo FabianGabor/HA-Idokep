@@ -6,7 +6,7 @@ from pathlib import Path
 import nox
 
 # Default Python versions to test against
-PYTHON_VERSIONS = ["3.11"]
+PYTHON_VERSIONS = ["3.13"]
 
 
 @nox.session(name="fast")
