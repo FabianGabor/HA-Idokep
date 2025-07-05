@@ -46,8 +46,11 @@ def mock_weather_data() -> dict[str, Any]:
     }
 
 
+# pylint: disable=redefined-outer-name
 @pytest.fixture
-def mock_idokep_data(mock_weather_data: dict[str, Any]) -> Mock:
+def mock_idokep_data(
+    mock_weather_data: dict[str, Any],  # pylint: disable=redefined-outer-name
+) -> Mock:
     """Return mock IdokepData."""
     mock_data = Mock()
     mock_data.current = mock_weather_data
@@ -55,9 +58,12 @@ def mock_idokep_data(mock_weather_data: dict[str, Any]) -> Mock:
     return mock_data
 
 
+# pylint: disable=redefined-outer-name
 @pytest.fixture
 def mock_coordinator(
-    mock_config_entry: Mock, mock_hass: Mock, mock_idokep_data: Mock
+    mock_config_entry: Mock,  # pylint: disable=redefined-outer-name
+    mock_hass: Mock,  # pylint: disable=redefined-outer-name
+    mock_idokep_data: Mock,  # pylint: disable=redefined-outer-name
 ) -> Mock:
     """Return a mock coordinator."""
     mock_coord = Mock()

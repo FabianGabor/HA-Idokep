@@ -80,7 +80,9 @@ def mock_coordinator_data() -> dict[str, Any]:
 
 @pytest.fixture
 def mock_coordinator(
-    mock_hass: Mock, mock_config_entry: Mock, mock_coordinator_data: dict[str, Any]
+    mock_hass: Mock,  # pylint: disable=redefined-outer-name
+    mock_config_entry: Mock,  # pylint: disable=redefined-outer-name
+    mock_coordinator_data: dict[str, Any],  # pylint: disable=redefined-outer-name
 ) -> Mock:
     """Return a mock coordinator."""
     coordinator = Mock(spec=IdokepDataUpdateCoordinator)
