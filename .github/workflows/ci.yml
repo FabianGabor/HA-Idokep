@@ -93,7 +93,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -r test-requirements.txt
-          pip install pytest pytest-cov pytest-asyncio pylint
+          # Note: pylint is included in test-requirements.txt
 
       - name: Run comprehensive check script
         run: |

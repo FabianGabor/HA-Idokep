@@ -4,7 +4,8 @@ pytest-asyncio>=0.21.0
 pytest-cov>=4.0.0
 pytest-mock>=3.10.0
 
-# Pylint plugin for per-file ignores
+# Code quality tools
+pylint>=3.0.0
 pylint-per-file-ignores>=1.4.0
 
 # Dependencies for API client testing (lightweight)
