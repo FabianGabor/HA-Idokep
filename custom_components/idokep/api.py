@@ -88,7 +88,7 @@ class IdokepApiClient:
                 msg,
             ) from exception
 
-    def _map_condition(self, condition: str) -> str:
+    def map_condition(self, condition: str) -> str:
         """Map Hungarian condition to Home Assistant standard condition."""
         mapping = {
             "napos": "sunny",
@@ -170,7 +170,7 @@ class IdokepApiClient:
                 # Weather condition
                 if isinstance(cond_div, Tag):
                     condition = cond_div.text.strip()
-                    result["condition"] = self._map_condition(condition)
+                    result["condition"] = self.map_condition(condition)
                     result["condition_hu"] = condition
 
                 # Weather title (e.g., 'Jelenleg')
@@ -346,7 +346,7 @@ class IdokepApiClient:
                         if icon_a and isinstance(icon_a, Tag):
                             condition_val = icon_a.get("data-bs-content")
                             if isinstance(condition_val, str):
-                                condition = self._map_condition(condition_val)
+                                condition = self.map_condition(condition_val)
 
                     # Extract precipitation data
                     precipitation, precipitation_probability = (
@@ -421,12 +421,12 @@ class IdokepApiClient:
         # Try detailed match first
         match = re.search(r"popover-icon' src='[^']+'>([^<]+)<", popover)
         if match:
-            return self._map_condition(match.group(1).strip())
+            return self.map_condition(match.group(1).strip())
 
         # Try simpler match as fallback
         text_match = re.search(r"popover-icon' src='[^']+'>([^<]+)", popover)
         if text_match:
-            return self._map_condition(text_match.group(1).strip())
+            return self.map_condition(text_match.group(1).strip())
 
         return None
 

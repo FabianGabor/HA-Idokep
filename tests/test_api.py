@@ -107,43 +107,43 @@ class TestIdokepApiClient:
 
     def test_map_condition_sunny(self, api_client: IdokepApiClient) -> None:
         """Test condition mapping for sunny conditions."""
-        assert api_client._map_condition("napos") == "sunny"
-        assert api_client._map_condition("derült") == "sunny"
-        assert api_client._map_condition("NAPOS") == "sunny"  # Case insensitive
+        assert api_client.map_condition("napos") == "sunny"
+        assert api_client.map_condition("derült") == "sunny"
+        assert api_client.map_condition("NAPOS") == "sunny"  # Case insensitive
 
     def test_map_condition_cloudy(self, api_client: IdokepApiClient) -> None:
         """Test condition mapping for cloudy conditions."""
-        assert api_client._map_condition("borult") == "cloudy"
-        assert api_client._map_condition("erősen felhős") == "cloudy"
+        assert api_client.map_condition("borult") == "cloudy"
+        assert api_client.map_condition("erősen felhős") == "cloudy"
 
     def test_map_condition_partly_cloudy(self, api_client: IdokepApiClient) -> None:
         """Test condition mapping for partly cloudy conditions."""
-        assert api_client._map_condition("közepesen felhős") == "partlycloudy"
-        assert api_client._map_condition("gyengén felhős") == "partlycloudy"
+        assert api_client.map_condition("közepesen felhős") == "partlycloudy"
+        assert api_client.map_condition("gyengén felhős") == "partlycloudy"
 
     def test_map_condition_rainy(self, api_client: IdokepApiClient) -> None:
         """Test condition mapping for rainy conditions."""
-        assert api_client._map_condition("zápor") == "rainy"
-        assert api_client._map_condition("szitálás") == "rainy"
-        assert api_client._map_condition("gyenge eső") == "rainy"
-        assert api_client._map_condition("eső") == "rainy"
-        assert api_client._map_condition("eső viharos széllel") == "rainy"
+        assert api_client.map_condition("zápor") == "rainy"
+        assert api_client.map_condition("szitálás") == "rainy"
+        assert api_client.map_condition("gyenge eső") == "rainy"
+        assert api_client.map_condition("eső") == "rainy"
+        assert api_client.map_condition("eső viharos széllel") == "rainy"
 
     def test_map_condition_special(self, api_client: IdokepApiClient) -> None:
         """Test condition mapping for special conditions."""
-        assert api_client._map_condition("zivatar") == "lightning-rainy"
-        assert api_client._map_condition("erős eső") == "pouring"
-        assert api_client._map_condition("jégeső") == "hail"
-        assert api_client._map_condition("havazás") == "snowy"
-        assert api_client._map_condition("havas eső") == "snowy-rainy"
-        assert api_client._map_condition("köd") == "fog"
-        assert api_client._map_condition("villámlás") == "lightning"
-        assert api_client._map_condition("szeles") == "windy"
+        assert api_client.map_condition("zivatar") == "lightning-rainy"
+        assert api_client.map_condition("erős eső") == "pouring"
+        assert api_client.map_condition("jégeső") == "hail"
+        assert api_client.map_condition("havazás") == "snowy"
+        assert api_client.map_condition("havas eső") == "snowy-rainy"
+        assert api_client.map_condition("köd") == "fog"
+        assert api_client.map_condition("villámlás") == "lightning"
+        assert api_client.map_condition("szeles") == "windy"
 
     def test_map_condition_unknown(self, api_client: IdokepApiClient) -> None:
         """Test condition mapping for unknown conditions."""
-        assert api_client._map_condition("ismeretlen időjárás") == "unknown"
-        assert api_client._map_condition("") == "unknown"
+        assert api_client.map_condition("ismeretlen időjárás") == "unknown"
+        assert api_client.map_condition("") == "unknown"
 
     @pytest.mark.asyncio
     async def test_api_wrapper_success(
@@ -604,7 +604,7 @@ class TestIdokepApiClientEdgeCases:
 
     def test_map_condition_empty_string(self, api_client: IdokepApiClient) -> None:
         """Test condition mapping with empty string."""
-        assert api_client._map_condition("") == "unknown"
+        assert api_client.map_condition("") == "unknown"
 
     def test_extract_temperature_invalid_format(self) -> None:
         """Test temperature extraction with invalid format."""

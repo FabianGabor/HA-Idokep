@@ -60,7 +60,7 @@ ENTITY_DESCRIPTIONS = (
 
 
 async def async_setup_entry(
-    hass: HomeAssistant,  # noqa: ARG001 Unused function argument: `hass`
+    _hass: HomeAssistant,
     entry: IdokepConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:

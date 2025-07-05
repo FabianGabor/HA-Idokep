@@ -127,14 +127,14 @@ def ruff_fix(session: nox.Session) -> None:
 @nox.session
 def pylint(session: nox.Session) -> None:
     """Run Pylint."""
-    session.install("pylint", "homeassistant")
+    session.install("pylint", "homeassistant", "beautifulsoup4")
     session.run("pylint", "custom_components", "tests", *session.posargs)
 
 
 @nox.session
 def mypy(session: nox.Session) -> None:
     """Run mypy type checking."""
-    session.install("mypy", "homeassistant")
+    session.install("mypy", "homeassistant", "beautifulsoup4")
     session.run("mypy", "custom_components", *session.posargs)
 
 
@@ -162,7 +162,7 @@ def lint_all(session: nox.Session) -> None:
     session.run("ruff", "format", "--check", ".")
 
     # Run Pylint
-    session.install("pylint", "homeassistant")
+    session.install("pylint", "homeassistant", "beautifulsoup4")
     session.run("pylint", "custom_components", "tests")
 
 
@@ -171,7 +171,13 @@ def test_all(session: nox.Session) -> None:
     """Run comprehensive tests with all checks."""
     # Install all dependencies
     session.install(
-        "pytest", "pytest-asyncio", "pytest-cov", "ruff", "pylint", "homeassistant"
+        "pytest",
+        "pytest-asyncio",
+        "pytest-cov",
+        "ruff",
+        "pylint",
+        "homeassistant",
+        "beautifulsoup4",
     )
 
     # Run linting first
