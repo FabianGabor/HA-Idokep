@@ -269,17 +269,24 @@ class CurrentWeatherParser(WeatherParser):
             if img and isinstance(img, Tag):
                 alt = str(img.attrs.get("alt", ""))
 
-                sunrise_iso = TimeUtils.extract_time_from_text(
-                    "Napkelte", alt, today, local_tz
-                )
-                if sunrise_iso:
-                    result["sunrise"] = sunrise_iso
+                # Check if this div contains sunrise or sunset info
+                if "Napkelte" in alt or "Napnyugta" in alt:
+                    # Get the text content of the div which contains the time
+                    div_text = div.get_text(strip=True)
 
-                sunset_iso = TimeUtils.extract_time_from_text(
-                    "Napnyugta", alt, today, local_tz
-                )
-                if sunset_iso:
-                    result["sunset"] = sunset_iso
+                    if "Napkelte" in alt:
+                        sunrise_iso = TimeUtils.extract_time_from_text(
+                            "Napkelte", div_text, today, local_tz
+                        )
+                        if sunrise_iso:
+                            result["sunrise"] = sunrise_iso
+
+                    if "Napnyugta" in alt:
+                        sunset_iso = TimeUtils.extract_time_from_text(
+                            "Napnyugta", div_text, today, local_tz
+                        )
+                        if sunset_iso:
+                            result["sunset"] = sunset_iso
 
         return result
 

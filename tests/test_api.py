@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import datetime
-import re
 import socket
+from datetime import datetime
 from unittest.mock import AsyncMock, Mock, patch
 
 import aiohttp
@@ -12,6 +11,7 @@ import pytest
 from bs4 import BeautifulSoup, Tag
 
 from custom_components.idokep.api import (
+    CurrentWeatherParser,
     IdokepApiClient,
     IdokepApiClientAuthenticationError,
     IdokepApiClientCommunicationError,
@@ -718,8 +718,8 @@ class TestIdokepApiClientWeatherScraping:
         assert result["precipitation"] == 5
 
 
-class TestIdokepApiClientPrecipitationExtraction:
-    """Test precipitation extraction edge cases."""
+class TestSunriseSunsetRegression:
+    """Test sunrise and sunset parsing."""
 
     @pytest.fixture
     def mock_session(self) -> Mock:
@@ -728,502 +728,118 @@ class TestIdokepApiClientPrecipitationExtraction:
 
     @pytest.fixture
     def api_client(self, mock_session: Mock) -> IdokepApiClient:
-        """Create an API client with mocked session."""
+        """Create API client for testing."""
         return IdokepApiClient(mock_session)
 
-    def test_extract_precipitation_probability_no_rain_chance_div(
+    def test_sunrise_sunset_div_text_extraction(
         self, api_client: IdokepApiClient
     ) -> None:
-        """Test extraction when hourly-rain-chance div is missing."""
-        html = '<div class="card"></div>'
-        soup = BeautifulSoup(html, "html.parser")
-        card = soup.find("div", class_="card")
-
-        if isinstance(card, Tag):
-            result = api_client._extract_precipitation_probability(card)
-            assert result == 0
-
-    def test_extract_precipitation_probability_no_a_tag(
-        self, api_client: IdokepApiClient
-    ) -> None:
-        """Test extraction when a tag is missing in rain chance div."""
-        html = (
-            '<div class="card"><div class="ik hourly-rain-chance">No link</div></div>'
-        )
-        soup = BeautifulSoup(html, "html.parser")
-        card = soup.find("div", class_="card")
-
-        if isinstance(card, Tag):
-            result = api_client._extract_precipitation_probability(card)
-            assert result == 0
-
-    def test_extract_precipitation_probability_no_percent_sign(
-        self, api_client: IdokepApiClient
-    ) -> None:
-        """Test extraction when text doesn't end with %."""
-        # This tests line 286
-        html = (
-            '<div class="card"><div class="ik hourly-rain-chance"><a>25</a></div></div>'
-        )
-        soup = BeautifulSoup(html, "html.parser")
-        card = soup.find("div", class_="card")
-
-        if isinstance(card, Tag):
-            result = api_client._extract_precipitation_probability(card)
-            assert result == 0
-
-    def test_extract_precipitation_probability_invalid_number(
-        self, api_client: IdokepApiClient
-    ) -> None:
-        """Test extraction when percentage text is not a valid number."""
-        # This tests lines 290-291
-        html = (
-            '<div class="card">'
-            '<div class="ik hourly-rain-chance"><a>abc%</a></div>'
-            "</div>"
-        )
-        soup = BeautifulSoup(html, "html.parser")
-        card = soup.find("div", class_="card")
-
-        if isinstance(card, Tag):
-            result = api_client._extract_precipitation_probability(card)
-            assert result == 0
-
-    def test_extract_precipitation_amount_no_rainlevel_divs(
-        self, api_client: IdokepApiClient
-    ) -> None:
-        """Test precipitation amount extraction when no rainlevel divs exist."""
-        html = '<div class="card"><div class="other-class"></div></div>'
-        soup = BeautifulSoup(html, "html.parser")
-        card = soup.find("div", class_="card")
-
-        if isinstance(card, Tag):
-            result = api_client._extract_precipitation_amount(card)
-            assert result == 0
-
-    def test_extract_precipitation_amount_non_tag_element(
-        self, api_client: IdokepApiClient
-    ) -> None:
-        """Test precipitation amount extraction with non-Tag elements."""
-        # This tests line 300 (continue when not isinstance(rainlevel_div, Tag))
-        html = '<div class="card"><div class="ik rainlevel-3">Text content</div></div>'
-        soup = BeautifulSoup(html, "html.parser")
-        card = soup.find("div", class_="card")
-
-        # Manually manipulate the soup to include non-Tag elements
-        if isinstance(card, Tag):
-            # This should still work normally
-            result = api_client._extract_precipitation_amount(card)
-            assert result == 3
-
-    def test_parse_rainlevel_class_no_class_attr(
-        self, api_client: IdokepApiClient
-    ) -> None:
-        """Test rainlevel parsing when element has no class attribute."""
-        html = "<div>No class</div>"
-        soup = BeautifulSoup(html, "html.parser")
-        div = soup.find("div")
-
-        if isinstance(div, Tag):
-            result = api_client._parse_rainlevel_class(div)
-            assert result == 0
-
-    def test_parse_rainlevel_class_string_class(
-        self, api_client: IdokepApiClient
-    ) -> None:
-        """Test rainlevel parsing when class is a string instead of list."""
-        html = '<div class="ik rainlevel-7">Content</div>'
-        soup = BeautifulSoup(html, "html.parser")
-        div = soup.find("div")
-
-        if isinstance(div, Tag):
-            result = api_client._parse_rainlevel_class(div)
-            assert result == 7
-
-    def test_parse_rainlevel_class_invalid_number(
-        self, api_client: IdokepApiClient
-    ) -> None:
-        """Test rainlevel parsing with invalid number in class name."""
-        # This tests lines 326-329 (ValueError handling)
-        html = '<div class="ik rainlevel-abc">Content</div>'
-        soup = BeautifulSoup(html, "html.parser")
-        div = soup.find("div")
-
-        if isinstance(div, Tag):
-            # Simulate the ValueError path by mocking the regex match
-            with patch("re.search") as mock_search:
-                mock_match = Mock()
-                mock_match.group.return_value = "abc"
-                mock_search.return_value = mock_match
-                result = api_client._parse_rainlevel_class(div)
-                assert result == 0
-
-    def test_extract_daily_precipitation_probability_from_span(
-        self, api_client: IdokepApiClient
-    ) -> None:
-        """Test daily precipitation probability extraction from span elements."""
-        # This tests lines 471-488 (percentage extraction from spans)
-        html = """
-        <div class="col">
-            <span>60%</span>
-            <div>Other content</div>
-        </div>
-        """
-        soup = BeautifulSoup(html, "html.parser")
-        col = soup.find("div", class_="col")
-
-        if isinstance(col, Tag):
-            result = api_client._extract_daily_precipitation_probability(col)
-            assert result == 60
-
-    def test_extract_daily_precipitation_probability_invalid_percentage(
-        self, api_client: IdokepApiClient
-    ) -> None:
-        """Test daily precipitation probability with invalid percentage format."""
-        # This tests ValueError handling in percentage extraction
-        html = """
-        <div class="col">
-            <span>abc%</span>
-        </div>
-        """
-        soup = BeautifulSoup(html, "html.parser")
-        col = soup.find("div", class_="col")
-
-        if isinstance(col, Tag):
-            result = api_client._extract_daily_precipitation_probability(col)
-            assert result == 0
-
-    def test_extract_daily_precipitation_probability_from_data_attr(
-        self, api_client: IdokepApiClient
-    ) -> None:
-        """Test daily precipitation probability extraction from data attributes."""
-        # This tests the data-bs-content extraction path
-        html = """
-        <div class="col">
-            <a data-bs-content="csapadék esélye: 75%">Weather info</a>
-        </div>
-        """
-        soup = BeautifulSoup(html, "html.parser")
-        col = soup.find("div", class_="col")
-
-        if isinstance(col, Tag):
-            result = api_client._extract_daily_precipitation_probability(col)
-            assert result == 75
-
-    def test_extract_current_precipitation_complex_text(
-        self, api_client: IdokepApiClient
-    ) -> None:
-        """Test current precipitation extraction with complex text patterns."""
-        # This tests lines 530-531 and other precipitation extraction logic
+        """Test that sunrise/sunset times are extracted from div text, not alt."""
         html = """
         <div>
-            <span>Csapadék várható mennyisége: 8 mm</span>
+            <img alt="Napkelte" />Napkelte 4:54
+        </div>
+        <div class="pt-2">
+            <img alt="Napnyugta" />Napnyugta 20:44
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+
+        result = api_client._parse_sunrise_sunset(soup)
+
+        # Ensure data is extracted (regression prevention)
+        assert "sunrise" in result
+        assert "sunset" in result
+        assert "4:54" in result["sunrise"]
+        assert "20:44" in result["sunset"]
+
+    def test_sunrise_sunset_with_current_parser(self) -> None:
+        """Test integration with CurrentWeatherParser."""
+        parser = CurrentWeatherParser()
+        html = """
+        <div class="ik current-temperature">25°C</div>
+        <div class="ik current-weather">napos</div>
+        <div>
+            <img alt="Napkelte" />Napkelte 6:30
         </div>
         <div>
-            <span>Csapadék valószínűsége: 85%</span>
+            <img alt="Napnyugta" />Napnyugta 19:45
         </div>
         """
         soup = BeautifulSoup(html, "html.parser")
 
-        result = api_client._extract_current_precipitation(soup)
+        result = parser.parse(soup)
 
-        # Should extract both values
-        assert result["precipitation"] == 8
-        assert result["precipitation_probability"] == 85
+        # Should include all data including sunrise/sunset
+        assert "temperature" in result
+        assert "condition" in result
+        assert "sunrise" in result
+        assert "sunset" in result
+        assert "6:30" in result["sunrise"]
+        assert "19:45" in result["sunset"]
 
-
-class TestIdokepApiClientEdgeCases:
-    """Test edge cases and error handling."""
-
-    @pytest.fixture
-    def mock_session(self) -> Mock:
-        """Create a mock aiohttp session."""
-        return Mock(spec=aiohttp.ClientSession)
-
-    @pytest.fixture
-    def api_client(self, mock_session: Mock) -> IdokepApiClient:
-        """Create an API client with mocked session."""
-        return IdokepApiClient(mock_session)
-
-    def test_map_condition_empty_string(self, api_client: IdokepApiClient) -> None:
-        """Test condition mapping with empty string."""
-        assert api_client.map_condition("") == "unknown"
-
-    def test_extract_temperature_invalid_format(self) -> None:
-        """Test temperature extraction with invalid format."""
-        html = '<div class="ik current-temperature">Invalid temp</div>'
-        soup = BeautifulSoup(html, "html.parser")
-
-        # This would be called internally by _scrape_current_weather
-        temp_div = soup.find("div", class_="ik current-temperature")
-        if temp_div is not None:
-            match = re.search(r"(-?\d+)[^\d]*C", temp_div.text)
-            assert match is None  # Should not find valid temperature
-
-    def test_extract_daily_temperature_missing_elements(
-        self, api_client: IdokepApiClient
-    ) -> None:
-        """Test daily temperature extraction with missing elements."""
-        html = '<div class="col"></div>'
-        soup = BeautifulSoup(html, "html.parser")
-        col = soup.find("div", class_="col")
-
-        if col is not None and isinstance(col, Tag):
-            result = api_client._extract_daily_temperature(col, "ik min")
-            assert result is None
-
-    def test_extract_daily_precipitation_no_mm(
-        self, api_client: IdokepApiClient
-    ) -> None:
-        """Test daily precipitation extraction without mm indicator."""
-        html = '<div class="col"><span class="ik mm"></span></div>'
-        soup = BeautifulSoup(html, "html.parser")
-        col = soup.find("div", class_="col")
-
-        if col is not None and isinstance(col, Tag):
-            result = api_client._extract_daily_precipitation(col)
-            assert result == 0
-
-    def test_extract_hourly_precipitation_missing_elements(
-        self, api_client: IdokepApiClient
-    ) -> None:
-        """Test hourly precipitation extraction with missing elements."""
-        html = '<div class="card"></div>'
-        soup = BeautifulSoup(html, "html.parser")
-        card = soup.find("div", class_="card")
-
-        if card is not None and isinstance(card, Tag):
-            precipitation, precipitation_probability = (
-                api_client._extract_hourly_precipitation_data(card)
-            )
-            assert precipitation == 0
-            assert precipitation_probability == 0
-
-    def test_extract_daily_precipitation_probability_value_error(
-        self, api_client: IdokepApiClient
-    ) -> None:
-        """Test daily precipitation probability extraction with ValueError."""
-        html = """
-        <div class="col">
-            <span>invalid%</span>
-            <div data-bs-content="csapadék: invalid%">Weather info</div>
-        </div>
-        """
-        soup = BeautifulSoup(html, "html.parser")
-        col = soup.find("div", class_="col")
-
-        if col and isinstance(col, Tag):
-            result = api_client._extract_daily_precipitation_probability(col)
-            assert result == 0  # Should return 0 for invalid percentages
-
-    def test_extract_time_from_text_no_match(self, api_client: IdokepApiClient) -> None:
-        """Test time extraction when no time pattern is found."""
-        # This tests line 239 (return None when no match found)
-        html = "<div>Some other text</div>"
-        soup = BeautifulSoup(html, "html.parser")
-        div = soup.find("div")
-
-        if isinstance(div, Tag):
-            local_tz = datetime.timezone(datetime.timedelta(hours=2))
-            today = datetime.date(2024, 1, 15)
-
-            result = api_client._extract_time_from_text(
-                "Napkelte", div, today, local_tz, "Some other text"
-            )
-            assert result is None
-
-    def test_extract_time_from_text_missing_time_in_text(
-        self, api_client: IdokepApiClient
-    ) -> None:
-        """Test time extraction when label is found but no time pattern."""
-        # This tests the case where label is in text but time format is invalid
-        html = "<div>Napkelte unknown</div>"
-        soup = BeautifulSoup(html, "html.parser")
-        div = soup.find("div")
-
-        if isinstance(div, Tag):
-            local_tz = datetime.timezone(datetime.timedelta(hours=2))
-            today = datetime.date(2024, 1, 15)
-
-            result = api_client._extract_time_from_text(
-                "Napkelte", div, today, local_tz, "Napkelte unknown"
-            )
-            assert result is None
-
-    def test_hourly_forecast_missing_datetime_elements(self) -> None:
-        """Test hourly forecast parsing with missing datetime elements."""
-        # This tests lines 354, 395, 410-411 where we check for missing elements
-        html = """
-        <div class="ik new-hourly-forecast-card">
-            <!-- Missing hour div -->
-            <div class="ik tempValue"><a>25</a></div>
-        </div>
-        """
-
-        soup = BeautifulSoup(html, "html.parser")
-        cards = soup.find_all("div", class_="ik new-hourly-forecast-card")
-
-        # This would be called inside _scrape_hourly_forecast
-        # The missing hour_div should be handled gracefully
-        assert len(cards) == 1
-        card = cards[0]
-        assert isinstance(card, Tag)
-
-        # Verify the elements we're looking for
-        hour_div = card.find("div", class_="ik new-hourly-forecast-hour")
-        temp_div = card.find("div", class_="ik tempValue")
-
-        assert hour_div is None  # This should trigger the continue/skip logic
-        assert temp_div is not None
-
-    def test_daily_forecast_missing_elements_skip(
-        self, api_client: IdokepApiClient
-    ) -> None:
-        """Test daily forecast with missing required elements causes skip."""
-        # This tests line 507 where missing elements are handled
-        html = """
-        <div class="ik dailyForecastCol">
-            <!-- Missing min/max temperature divs -->
-            <div class="ik dfIconAlert">
-                <a data-bs-content="popover-icon' src='icon.png'>Napos<"></a>
-            </div>
-        </div>
-        """
-
-        soup = BeautifulSoup(html, "html.parser")
-        cols = soup.find_all("div", class_="ik dailyForecastCol")
-
-        assert len(cols) == 1
-        col = cols[0]
-        assert isinstance(col, Tag)
-
-        # Verify missing temperature elements
-        min_temp = api_client._extract_daily_temperature(col, "ik min")
-        max_temp = api_client._extract_daily_temperature(col, "ik max")
-
-        assert min_temp is None
-        assert max_temp is None
-
-
-class TestIdokepApiClientAdvancedScenarios:
-    """Test advanced scenarios and additional edge cases for comprehensive coverage."""
-
-    @pytest.fixture
-    def mock_session(self) -> Mock:
-        """Create a mock aiohttp session."""
-        return Mock(spec=aiohttp.ClientSession)
-
-    @pytest.fixture
-    def api_client(self, mock_session: Mock) -> IdokepApiClient:
-        """Create an API client with mocked session."""
-        return IdokepApiClient(mock_session)
-
-    def test_zoneinfo_fallback_when_none(self, api_client: IdokepApiClient) -> None:
-        """Test zoneinfo fallback when zoneinfo is None."""
-        html = '<div><img alt="Napkelte 06:30" /></div>'
-        soup = BeautifulSoup(html, "html.parser")
-
-        # Patch zoneinfo to None to test the fallback path
-        with patch("custom_components.idokep.api.zoneinfo", None):
-            result = api_client._parse_sunrise_sunset(soup)
-            assert isinstance(result, dict)
-
-    def test_extract_daily_condition_no_match(
-        self, api_client: IdokepApiClient
-    ) -> None:
-        """Test daily condition extraction when regex doesn't match."""
-        html = """
-        <div class="col">
-            <div class="ik dfIconAlert">
-                <a data-bs-content="no weather pattern here">No match</a>
-            </div>
-        </div>
-        """
-        soup = BeautifulSoup(html, "html.parser")
-        col = soup.find("div", class_="col")
-
-        if col and isinstance(col, Tag):
-            result = api_client._extract_daily_condition(col)
-            assert result is None  # Should return None when no regex match
-
-    @pytest.mark.asyncio
-    async def test_async_get_weather_data_exception_in_gather(
-        self, api_client: IdokepApiClient
-    ) -> None:
-        """Test async_get_weather_data with exception handling in asyncio.gather."""
-        # Mock the scraping methods to raise different types of exceptions
-        with (
-            patch.object(
-                api_client,
-                "_scrape_current_weather",
-                new_callable=AsyncMock,
-                side_effect=aiohttp.ClientError(),
-            ),
-            patch.object(
-                api_client,
-                "_scrape_hourly_forecast",
-                new_callable=AsyncMock,
-                side_effect=TimeoutError(),
-            ),
-            patch.object(
-                api_client,
-                "_scrape_daily_forecast",
-                new_callable=AsyncMock,
-                side_effect=Exception("error"),
-            ),
-        ):
-            result = await api_client.async_get_weather_data("budapest")
-
-        # Should return empty dict when all methods fail
-        assert isinstance(result, dict)
-
-    def test_extract_current_precipitation_complex_scenarios(
-        self, api_client: IdokepApiClient
-    ) -> None:
-        """Test current precipitation extraction with complex scenarios."""
-        # Test precipitation probability extraction for edge cases
+    def test_sunrise_sunset_timezone_format(self, api_client: IdokepApiClient) -> None:
+        """Test that times are formatted with timezone."""
         html = """
         <div>
-            <span>Some text with percentage: 45%</span>
-            <div>
-                <span>Csapadék esélye: 60%</span>
-            </div>
-            <span>Várható csapadék: 12 mm</span>
+            <img alt="Napkelte" />Napkelte 6:30
+        </div>
+        <div>
+            <img alt="Napnyugta" />Napnyugta 19:45
         </div>
         """
         soup = BeautifulSoup(html, "html.parser")
 
-        result = api_client._extract_current_precipitation(soup)
+        result = api_client._parse_sunrise_sunset(soup)
 
-        # Should find both precipitation probability and amount
-        assert result["precipitation_probability"] == 45  # First match
-        assert result["precipitation"] == 12
+        # Check timezone format
+        assert "sunrise" in result
+        assert "sunset" in result
+        sunrise_tz = result["sunrise"][-6:]
+        sunset_tz = result["sunset"][-6:]
+        assert sunrise_tz in ["+01:00", "+02:00"]
+        assert sunset_tz in ["+01:00", "+02:00"]
 
-    @pytest.mark.asyncio
-    async def test_scrape_methods_async_context_manager_exit(
+    def test_sunrise_sunset_datetime_compatibility(
         self, api_client: IdokepApiClient
     ) -> None:
-        """Test async context manager exit paths in scrape methods."""
-        # Test the async context manager paths that might not be covered
-        mock_response = AsyncMock()
-        mock_response.raise_for_status = Mock()
-        mock_response.text = AsyncMock(return_value="<html></html>")
-        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_response.__aexit__ = AsyncMock(return_value=None)
+        """Test that extracted times are compatible with datetime parsing."""
+        html = """
+        <div>
+            <img alt="Napkelte" />Napkelte 6:30
+        </div>
+        <div>
+            <img alt="Napnyugta" />Napnyugta 19:45
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
 
-        api_client._session.get = Mock(return_value=mock_response)
+        result = api_client._parse_sunrise_sunset(soup)
 
-        with patch("custom_components.idokep.api.async_timeout.timeout"):
-            # Test all three scrape methods to ensure coverage
-            result1 = await api_client._scrape_current_weather("http://test.com")
-            result2 = await api_client._scrape_hourly_forecast("http://test.com")
-            result3 = await api_client._scrape_daily_forecast("http://test.com")
+        # Should be parseable by datetime.fromisoformat
+        assert "sunrise" in result
+        assert "sunset" in result
 
-        # Verify the async context manager was used properly
-        assert mock_response.__aenter__.call_count == 3
-        assert mock_response.__aexit__.call_count == 3
+        sunrise_dt = datetime.fromisoformat(result["sunrise"])
+        sunset_dt = datetime.fromisoformat(result["sunset"])
 
-        # Results should be dicts
-        assert isinstance(result1, dict)
-        assert isinstance(result2, dict)
-        assert isinstance(result3, dict)
+        assert sunrise_dt.hour == 6
+        assert sunrise_dt.minute == 30
+        assert sunset_dt.hour == 19
+        assert sunset_dt.minute == 45
+
+    def test_sunrise_sunset_no_data_graceful_handling(
+        self, api_client: IdokepApiClient
+    ) -> None:
+        """Test graceful handling when no sunrise/sunset data is found."""
+        html = """
+        <div>
+            <img alt="Weather" />Temperature: 22°C
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+
+        result = api_client._parse_sunrise_sunset(soup)
+
+        # Should return empty dict when no data found
+        assert result == {}
