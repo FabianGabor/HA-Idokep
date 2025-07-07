@@ -1,0 +1,122 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths: ['custom_components/idokep/manifest.json']
+
+jobs:
+  validate-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for better changelog
+
+      - name: Get version info
+        id: version
+        run: |
+          VERSION=$(cat custom_components/idokep/manifest.json | jq -r '.version')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+          # Check if this version already exists as a tag
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "❌ Version v$VERSION already exists as a tag!"
+            exit 1
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "✅ New version v$VERSION detected"
+          fi
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies and run tests
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r test-requirements.txt
+          python -m pytest tests/ -v
+
+      - name: Validate HACS
+        uses: hacs/action@main
+        with:
+          category: integration
+
+      - name: Create release assets
+        run: |
+          # Create a clean copy for release
+          mkdir -p dist/custom_components
+          cp -r custom_components/idokep dist/custom_components/
+
+          # Remove development files
+          find dist/custom_components/idokep -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+          find dist/custom_components/idokep -name "*.pyc" -delete
+          find dist/custom_components/idokep -name ".pytest_cache" -type d -exec rm -rf {} + 2>/dev/null || true
+
+          # Create zip
+          cd dist
+          zip -r ../idokep-${{ steps.version.outputs.version }}.zip custom_components/idokep/
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get last tag
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+          {
+            echo "CHANGELOG<<EOF"
+            echo "## 🚀 What's New in v${{ steps.version.outputs.version }}"
+            echo ""
+
+            if [ -n "$LAST_TAG" ]; then
+              echo "### 📋 Changes since $LAST_TAG"
+              git log --pretty=format:"- %s (%h)" "$LAST_TAG"..HEAD --no-merges | head -20
+            else
+              echo "### 📋 Initial Release"
+              echo "- Initial release of Időkép integration"
+            fi
+
+            echo ""
+            echo "## 📦 Installation"
+            echo ""
+            echo "### 🏠 HACS (Recommended)"
+            echo "1. Open HACS in Home Assistant"
+            echo "2. Go to Integrations"
+            echo "3. Search for 'Időkép'"
+            echo "4. Download and restart Home Assistant"
+            echo "5. Add the integration via Settings → Devices & Services"
+            echo ""
+            echo "### 📁 Manual Installation"
+            echo "1. Download \`idokep-${{ steps.version.outputs.version }}.zip\`"
+            echo "2. Extract to \`<config>/custom_components/\`"
+            echo "3. Restart Home Assistant"
+            echo ""
+            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/$LAST_TAG...v${{ steps.version.outputs.version }}"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: "Időkép v${{ steps.version.outputs.version }}"
+          body: ${{ steps.changelog.outputs.CHANGELOG }}
+          files: |
+            idokep-${{ steps.version.outputs.version }}.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Success notification
+        run: |
+          echo "🎉 Release v${{ steps.version.outputs.version }} created successfully!"
+          echo "📦 HACS users will be notified automatically"
+          echo "🔗 Release URL: https://github.com/${{ github.repository }}/releases/tag/v${{ steps.version.outputs.version }}"

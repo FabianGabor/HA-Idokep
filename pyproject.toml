@@ -9,6 +9,10 @@ markers = [
     "asyncio: marks tests as asyncio tests",
 ]
 asyncio_mode = "auto"
+filterwarnings = [
+    "ignore:Inheritance class HomeAssistantApplication from web.Application is discouraged:DeprecationWarning",
+    "ignore:coroutine .* was never awaited:RuntimeWarning",
+]
 
 # Ruff configuration is in .ruff.toml
 
