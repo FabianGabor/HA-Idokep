@@ -19,6 +19,16 @@
             "short_forecast": {
                 "name": "Rövid előrejelzés"
             }
+        },
+        "binary_sensor": {
+            "idokep_connectivity": {
+                "name": "Időkép elérhetőség",
+                "device_class": "connectivity"
+            },
+            "storm_expected_1h": {
+                "name": "Vihar várható az elkövetkező órában",
+                "device_class": "safety"
+            }
         }
     }
 }

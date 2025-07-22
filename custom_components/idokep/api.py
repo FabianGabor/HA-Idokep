@@ -22,7 +22,6 @@ except ImportError:
 from .const import LOGGER
 
 
-# Data classes for structured responses
 @dataclass
 class WeatherData:
     """Structured weather data."""
@@ -108,6 +107,8 @@ class WeatherConditionMapper:
         "erősen felhős": "cloudy",
         "közepesen felhős": "partlycloudy",
         "gyengén felhős": "partlycloudy",
+        "száraz zivatar": "lightning",
+        "villámlás": "lightning",
         "zivatar": "lightning-rainy",
         "zápor": "rainy",
         "szitálás": "rainy",
@@ -117,7 +118,6 @@ class WeatherConditionMapper:
         "köd": "fog",
         "párás": "fog",
         "pára": "fog",
-        "villámlás": "lightning",
         "erős eső": "pouring",
         "jégeső": "hail",
         "havazás": "snowy",
