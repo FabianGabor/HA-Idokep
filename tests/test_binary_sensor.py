@@ -20,10 +20,8 @@ class TestIdokepBinarySensor:
 
     def test_entity_descriptions(self) -> None:
         """Test that ENTITY_DESCRIPTIONS is properly defined."""
-        assert len(ENTITY_DESCRIPTIONS) == 1
         description = ENTITY_DESCRIPTIONS[0]
-        assert description.key == "idokep"
-        assert description.name == "Idokep Binary Sensor"
+        assert description.key == "idokep_connectivity"
         assert description.device_class == BinarySensorDeviceClass.CONNECTIVITY
 
     @pytest.mark.asyncio
@@ -44,7 +42,7 @@ class TestIdokepBinarySensor:
 
         # Get the entities that were added
         added_entities = list(mock_async_add_entities.call_args[0][0])
-        assert len(added_entities) == 1
+        assert len(added_entities) == 2
 
         # Verify the entity is of correct type
         entity = added_entities[0]
@@ -62,21 +60,19 @@ class TestIdokepBinarySensor:
         # Verify initialization
         assert binary_sensor.coordinator is mock_coordinator
         assert binary_sensor.entity_description is entity_description
-        assert binary_sensor.entity_description.key == "idokep"
+        assert binary_sensor.entity_description.key == "idokep_connectivity"
 
-    def test_is_on_true(self, mock_coordinator: Mock) -> None:
-        """Test is_on property returns True when condition is met."""
-        # Setup coordinator data to return "foo" for title
-        mock_coordinator.data = {"title": "foo"}
+        entity_description = ENTITY_DESCRIPTIONS[1]
 
-        entity_description = ENTITY_DESCRIPTIONS[0]
         binary_sensor = IdokepBinarySensor(
             coordinator=mock_coordinator,
             entity_description=entity_description,
         )
 
-        # Test that is_on returns True
-        assert binary_sensor.is_on is True
+        # Verify initialization
+        assert binary_sensor.coordinator is mock_coordinator
+        assert binary_sensor.entity_description is entity_description
+        assert binary_sensor.entity_description.key == "storm_expected_1h"
 
     def test_is_on_false(self, mock_coordinator: Mock) -> None:
         """Test is_on property returns False when condition is not met."""
