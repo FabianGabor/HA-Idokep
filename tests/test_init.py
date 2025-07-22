@@ -23,7 +23,7 @@ class TestIdokepInit:
 
     def test_platforms_constant(self) -> None:
         """Test that PLATFORMS constant is correctly defined."""
-        expected_platforms = [Platform.SENSOR, Platform.WEATHER]
+        expected_platforms = [Platform.BINARY_SENSOR, Platform.SENSOR, Platform.WEATHER]
         assert expected_platforms == PLATFORMS
 
     @pytest.mark.asyncio

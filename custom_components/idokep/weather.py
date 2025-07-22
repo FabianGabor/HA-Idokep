@@ -123,6 +123,7 @@ class IdokepWeatherEntity(IdokepEntity, WeatherEntity):
         attrs["temperature_unit"] = "°C"
         attrs["precipitation_unit"] = "mm"
         attrs["short_forecast"] = self.coordinator.data.get("short_forecast")
+
         return attrs
 
     async def async_forecast_hourly(self) -> list[Forecast]:
