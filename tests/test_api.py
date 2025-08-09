@@ -15,6 +15,7 @@ from custom_components.idokep.api import (
     IdokepApiClient,
     IdokepApiClientAuthenticationError,
     IdokepApiClientCommunicationError,
+    IdokepApiClientConnectivityError,
     IdokepApiClientError,
     _verify_response_or_raise,
 )
@@ -42,6 +43,13 @@ class TestIdokepApiClientExceptions:
         assert isinstance(error, IdokepApiClientError)
         assert isinstance(error, Exception)
         assert str(error) == "auth error"
+
+    def test_connectivity_error_inheritance(self) -> None:
+        """Test that IdokepApiClientConnectivityError inherits correctly."""
+        error = IdokepApiClientConnectivityError("connectivity error")
+        assert isinstance(error, IdokepApiClientError)
+        assert isinstance(error, Exception)
+        assert str(error) == "connectivity error"
 
     def test_verify_response_or_raise_success(self) -> None:
         """Test _verify_response_or_raise with successful response."""
@@ -245,6 +253,61 @@ class TestIdokepApiClient:
             await api_client._api_wrapper("GET", "http://test.com")
 
         assert "Something really wrong happened!" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_check_connectivity_success(
+        self, api_client: IdokepApiClient, mock_session: Mock
+    ) -> None:
+        """Test connectivity check with successful connection."""
+        mock_response = Mock()
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=None)
+        mock_session.get = Mock(return_value=mock_response)
+
+        with patch("custom_components.idokep.api.async_timeout.timeout"):
+            result = await api_client.check_connectivity()
+
+        assert result is True
+        mock_session.get.assert_called_once_with(
+            "https://www.idokep.hu", ssl=False, allow_redirects=False
+        )
+
+    @pytest.mark.asyncio
+    async def test_check_connectivity_failure(
+        self, api_client: IdokepApiClient, mock_session: Mock
+    ) -> None:
+        """Test connectivity check with connection failure."""
+        mock_session.get = Mock(side_effect=aiohttp.ClientError("Connection failed"))
+
+        with patch("custom_components.idokep.api.async_timeout.timeout"):
+            result = await api_client.check_connectivity()
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_check_connectivity_timeout(
+        self, api_client: IdokepApiClient, mock_session: Mock
+    ) -> None:
+        """Test connectivity check with timeout."""
+        mock_session.get = Mock(side_effect=TimeoutError("Timeout"))
+
+        with patch("custom_components.idokep.api.async_timeout.timeout"):
+            result = await api_client.check_connectivity()
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_async_get_weather_data_no_connectivity(
+        self, api_client: IdokepApiClient, mock_session: Mock
+    ) -> None:
+        """Test async_get_weather_data when there's no connectivity."""
+        with (
+            patch.object(api_client, "check_connectivity", return_value=False),
+            pytest.raises(IdokepApiClientConnectivityError) as exc_info,
+        ):
+            await api_client.async_get_weather_data("test_location")
+
+        assert "No internet connectivity" in str(exc_info.value)
 
 
 class TestIdokepApiClientWeatherScraping:
