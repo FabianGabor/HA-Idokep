@@ -300,7 +300,6 @@ class TestIdokepApiClient:
     async def test_async_get_weather_data_no_connectivity(
         self,
         api_client: IdokepApiClient,
-        mock_session: Mock,  # noqa: ARG002
     ) -> None:
         """Test async_get_weather_data when there's no connectivity."""
         with (
