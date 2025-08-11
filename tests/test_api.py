@@ -298,7 +298,9 @@ class TestIdokepApiClient:
 
     @pytest.mark.asyncio
     async def test_async_get_weather_data_no_connectivity(
-        self, api_client: IdokepApiClient, mock_session: Mock
+        self,
+        api_client: IdokepApiClient,
+        mock_session: Mock,  # noqa: ARG002
     ) -> None:
         """Test async_get_weather_data when there's no connectivity."""
         with (
@@ -545,6 +547,7 @@ class TestIdokepApiClientWeatherScraping:
         daily_data = {"daily_forecast": [{"datetime": "2024-01-15", "temperature": 25}]}
 
         with (
+            patch.object(api_client, "check_connectivity", return_value=True),
             patch.object(
                 api_client,
                 "_scrape_current_weather",
@@ -580,6 +583,7 @@ class TestIdokepApiClientWeatherScraping:
         current_data = {"temperature": 22, "condition": "sunny"}
 
         with (
+            patch.object(api_client, "check_connectivity", return_value=True),
             patch.object(
                 api_client,
                 "_scrape_current_weather",
@@ -621,8 +625,11 @@ class TestIdokepApiClientWeatherScraping:
                 {"hourly_forecast": []},
             ]
 
-        with patch(
-            "custom_components.idokep.api.asyncio.gather", side_effect=mock_gather
+        with (
+            patch.object(api_client, "check_connectivity", return_value=True),
+            patch(
+                "custom_components.idokep.api.asyncio.gather", side_effect=mock_gather
+            ),
         ):
             result = await api_client.async_get_weather_data("budapest")
 
@@ -638,6 +645,7 @@ class TestIdokepApiClientWeatherScraping:
         """Test async_get_weather_data when asyncio.gather itself fails."""
         # This tests lines 147-148 (top-level exception handling)
         with (
+            patch.object(api_client, "check_connectivity", return_value=True),
             patch(
                 "custom_components.idokep.api.asyncio.gather",
                 side_effect=aiohttp.ClientError("Network failure"),

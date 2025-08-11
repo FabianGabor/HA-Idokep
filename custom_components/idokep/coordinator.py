@@ -51,9 +51,12 @@ class IdokepDataUpdateCoordinator(DataUpdateCoordinator):
         try:
             data = await self._fetch_weather_data(location)
         except IdokepApiClientConnectivityError:
-            # Don't raise UpdateFailed for connectivity issues, just log and return empty dict
+            # Don't raise UpdateFailed for connectivity issues, just log and
+            # return empty dict
             # This prevents Home Assistant from marking entities as unavailable
-            self.logger.info("No internet connectivity to idokep.hu, keeping existing data")
+            self.logger.info(
+                "No internet connectivity to idokep.hu, keeping existing data"
+            )
             return self.data or {}
         except NoWeatherDataError as exception:
             raise UpdateFailed(exception) from exception
@@ -61,13 +64,9 @@ class IdokepDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def _fetch_weather_data(self, location: str) -> dict:
         """Fetch weather data for a given location."""
-        try:
-            data = await self.config_entry.runtime_data.client.async_get_weather_data(
-                location
-            )
-            if not data:
-                raise NoWeatherDataError(location)
-            return data
-        except IdokepApiClientConnectivityError:
-            # Re-raise connectivity errors to be handled by _async_update_data
-            raise
+        data = await self.config_entry.runtime_data.client.async_get_weather_data(
+            location
+        )
+        if not data:
+            raise NoWeatherDataError(location)
+        return data

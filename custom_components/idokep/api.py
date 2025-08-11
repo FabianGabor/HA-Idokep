@@ -189,22 +189,16 @@ class HttpClient:
         """Get the underlying session."""
         return self._session
 
-    async def check_connectivity(self, host: str = "www.idokep.hu", timeout: int = 3) -> bool:
+    async def check_connectivity(self, host: str = "www.idokep.hu") -> bool:
         """Check if the host is reachable."""
         try:
-            async with async_timeout.timeout(timeout):
-                async with self._session.get(f"https://{host}", 
-                                           ssl=False, 
-                                           allow_redirects=False) as response:
-                    # We just need to check if we can connect, any response is fine
-                    return True
-        except (
-            aiohttp.ClientError, 
-            TimeoutError, 
-            socket.gaierror,
-            asyncio.TimeoutError,
-            OSError
-        ):
+            async with (
+                async_timeout.timeout(3),
+                self._session.get(f"https://{host}", ssl=False, allow_redirects=False),
+            ):
+                # We just need to check if we can connect, any response is fine
+                return True
+        except (aiohttp.ClientError, TimeoutError, socket.gaierror, OSError):
             return False
 
     async def get_html(self, url: str) -> str:
@@ -644,8 +638,11 @@ class IdokepApiClient:
         """Get comprehensive weather data for location."""
         # Check connectivity first
         if not await self.check_connectivity():
-            LOGGER.warning("No internet connectivity to idokep.hu, skipping weather data update")
-            raise IdokepApiClientConnectivityError("No internet connectivity to idokep.hu")
+            LOGGER.warning(
+                "No internet connectivity to idokep.hu, skipping weather data update"
+            )
+            msg = "No internet connectivity to idokep.hu"
+            raise IdokepApiClientConnectivityError(msg)
 
         urls = [
             IdokepConfig.get_current_weather_url(location),
