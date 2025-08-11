@@ -39,7 +39,6 @@ def main() -> None:
         "--no-coverage", action="store_true", help="Skip coverage reporting"
     )
     parser.add_argument("--quiet", action="store_true", help="Reduce output verbosity")
-    parser.add_argument("--quiet", action="store_true", help="Reduce output verbosity")
 
     args = parser.parse_args()
 
