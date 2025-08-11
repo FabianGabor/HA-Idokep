@@ -1,4 +1,23 @@
 {
+    "config": {
+        "step": {
+            "user": {
+                "description": "Ha segítségre van szükséged a beállításhoz, nézd meg ezt: https://github.com/FabianGabor/HA-Idokep",
+                "data": {
+                    "username": "Felhasználónév",
+                    "password": "Jelszó"
+                }
+            }
+        },
+        "error": {
+            "auth": "Felhasználónév/Jelszó helytelen.",
+            "connection": "Nem sikerült csatlakozni a szerverhez.",
+            "unknown": "Ismeretlen hiba történt."
+        },
+        "abort": {
+            "already_configured": "Ez a bejegyzés már konfigurálva van."
+        }
+    },
     "entity": {
         "sensor": {
             "temperature": {
