@@ -40,7 +40,7 @@ async def async_setup_entry(
         hass=hass,
         logger=LOGGER,
         name=DOMAIN,
-        update_interval=timedelta(minutes=15),
+        update_interval=timedelta(minutes=5),
         config_entry=entry,
     )
     entry.runtime_data = IdokepData(

@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING
 
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
+from .api import IdokepApiClientConnectivityError
+
 if TYPE_CHECKING:
     from datetime import timedelta
     from logging import Logger
@@ -48,6 +50,14 @@ class IdokepDataUpdateCoordinator(DataUpdateCoordinator):
         location = self.config_entry.data["location"]
         try:
             data = await self._fetch_weather_data(location)
+        except IdokepApiClientConnectivityError:
+            # Don't raise UpdateFailed for connectivity issues, just log and
+            # return empty dict
+            # This prevents Home Assistant from marking entities as unavailable
+            self.logger.info(
+                "No internet connectivity to idokep.hu, keeping existing data"
+            )
+            return self.data or {}
         except NoWeatherDataError as exception:
             raise UpdateFailed(exception) from exception
         return data
