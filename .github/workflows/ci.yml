@@ -104,7 +104,7 @@ jobs:
         if: matrix.python-version == '3.13'
         uses: codecov/codecov-action@v4
         with:
-          file: ./coverage.xml
+          files: ./coverage.xml
           flags: ci-comprehensive
           name: ci-python-${{ matrix.python-version }}
           fail_ci_if_error: false

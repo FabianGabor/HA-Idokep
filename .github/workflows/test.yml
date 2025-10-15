@@ -54,7 +54,7 @@ jobs:
         if: matrix.python-version == '3.13'
         uses: codecov/codecov-action@v4
         with:
-          file: ./coverage.xml
+          files: ./coverage.xml
           flags: unittests
           name: codecov-umbrella
           fail_ci_if_error: false
@@ -111,7 +111,7 @@ jobs:
       - name: Upload coverage from check script
         uses: codecov/codecov-action@v4
         with:
-          file: ./coverage.xml
+          files: ./coverage.xml
           flags: comprehensive
           name: codecov-check-script
           fail_ci_if_error: false
