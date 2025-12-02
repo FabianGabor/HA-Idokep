@@ -7,10 +7,13 @@ import re
 from typing import TYPE_CHECKING
 
 from homeassistant.components.weather import (
+    ATTR_CONDITION_CLEAR_NIGHT,
+    ATTR_CONDITION_SUNNY,
     Forecast,
     WeatherEntity,
 )
 from homeassistant.components.weather.const import WeatherEntityFeature
+from homeassistant.helpers import sun
 from homeassistant.helpers.device_registry import DeviceInfo
 
 from .const import DOMAIN, NAME
@@ -93,7 +96,10 @@ class IdokepWeatherEntity(IdokepEntity, WeatherEntity):
     @property
     def condition(self) -> str | None:
         """Return the current weather condition."""
-        return self.coordinator.data.get("condition")
+        condition = self.coordinator.data.get("condition")
+        if condition == ATTR_CONDITION_SUNNY and not sun.is_up(self.hass):
+            return ATTR_CONDITION_CLEAR_NIGHT
+        return condition
 
     @property
     def native_temperature(self) -> float | None:

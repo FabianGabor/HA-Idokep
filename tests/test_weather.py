@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
+from homeassistant.components.weather import (
+    ATTR_CONDITION_CLEAR_NIGHT,
+    ATTR_CONDITION_SUNNY,
+)
 from homeassistant.components.weather.const import WeatherEntityFeature
 
 from custom_components.idokep.const import DOMAIN
@@ -125,10 +129,26 @@ class TestIdokepWeatherEntity:
         entity = IdokepWeatherEntity(mock_coordinator)
         assert entity.temperature is None
 
-    def test_condition_property(self, mock_coordinator: Mock) -> None:
-        """Test condition property returns coordinator data."""
-        entity = IdokepWeatherEntity(mock_coordinator)
-        assert entity.condition == "sunny"
+    def test_condition_property_daytime(self, mock_coordinator: Mock) -> None:
+        """Test condition property returns sunny during daytime."""
+        with patch("custom_components.idokep.weather.sun.is_up", return_value=True):
+            entity = IdokepWeatherEntity(mock_coordinator)
+            assert entity.condition == ATTR_CONDITION_SUNNY
+
+    def test_condition_property_nighttime(self, mock_coordinator: Mock) -> None:
+        """Test condition property returns clear-night when sunny at night."""
+        with patch("custom_components.idokep.weather.sun.is_up", return_value=False):
+            entity = IdokepWeatherEntity(mock_coordinator)
+            assert entity.condition == ATTR_CONDITION_CLEAR_NIGHT
+
+    def test_condition_property_non_sunny_nighttime(
+        self, mock_coordinator: Mock
+    ) -> None:
+        """Test condition returns original condition when not sunny at night."""
+        mock_coordinator.data = {"condition": "cloudy"}
+        with patch("custom_components.idokep.weather.sun.is_up", return_value=False):
+            entity = IdokepWeatherEntity(mock_coordinator)
+            assert entity.condition == "cloudy"
 
     def test_condition_property_none(self, mock_coordinator: Mock) -> None:
         """Test condition property when coordinator data is None."""
