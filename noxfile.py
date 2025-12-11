@@ -23,6 +23,8 @@ def fast_test(session: nox.Session) -> None:
 @nox.session(python=PYTHON_VERSIONS)
 def tests(session: nox.Session) -> None:
     """Run comprehensive tests with Home Assistant - SLOW but complete."""
+    # Pin pycares<5.0.0 for compatibility with homeassistant's aiodns==3.5.0
+    session.install("pycares>=4.9.0,<5.0.0")
     # Install all dependencies including Home Assistant
     session.install(
         "pytest", "pytest-asyncio", "pytest-cov", "homeassistant", "beautifulsoup4"
@@ -42,6 +44,8 @@ def tests(session: nox.Session) -> None:
 @nox.session(name="quick-test")
 def quick_test(session: nox.Session) -> None:
     """Run quick tests with minimal dependencies - no coverage."""
+    # Pin pycares<5.0.0 for compatibility with homeassistant's aiodns==3.5.0
+    session.install("pycares>=4.9.0,<5.0.0")
     # Install basic test requirements first
     session.install("-r", "test-requirements.txt")
     session.install("aiohttp", "beautifulsoup4", "homeassistant")
@@ -59,6 +63,8 @@ def quick_test(session: nox.Session) -> None:
 @nox.session(name="full-test")
 def full_test(session: nox.Session) -> None:
     """Run tests with Home Assistant (SLOW - use only when needed)."""
+    # Pin pycares<5.0.0 for compatibility with homeassistant's aiodns==3.5.0
+    session.install("pycares>=4.9.0,<5.0.0")
     session.install(
         "pytest", "pytest-asyncio", "pytest-cov", "homeassistant", "beautifulsoup4"
     )
