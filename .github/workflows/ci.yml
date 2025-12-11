@@ -59,6 +59,8 @@ jobs:
       - name: Install minimal dependencies
         run: |
           python -m pip install --upgrade pip
+          # Pin aiodns/pycares first for Python 3.13 compatibility
+          pip install aiodns>=3.6.0 pycares>=4.11.0
           pip install pytest aiohttp beautifulsoup4 ruff homeassistant pytest-asyncio
 
       - name: Quick lint check
