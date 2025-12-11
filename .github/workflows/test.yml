@@ -33,7 +33,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-cov pytest-asyncio
+          pip install -r test-requirements.txt
 
       - name: Run quick API tests
         run: |
@@ -73,7 +73,9 @@ jobs:
           cache: "pip"
 
       - name: Install nox
-        run: python -m pip install nox
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r test-requirements.txt
 
       - name: Run super-quick tests (API only)
         run: nox -s super-quick
@@ -101,7 +103,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-cov pytest-asyncio pylint
+          pip install -r test-requirements.txt
 
       - name: Run comprehensive check script
         run: |
@@ -132,6 +134,8 @@ jobs:
       - name: Install minimal dependencies
         run: |
           python -m pip install --upgrade pip
+          # Pin pycares<5.0.0 for compatibility with homeassistant's aiodns==3.5.0
+          pip install "pycares>=4.9.0,<5.0.0"
           pip install pytest aiohttp beautifulsoup4 homeassistant pytest-asyncio
 
       - name: Run fast API tests only
@@ -156,6 +160,8 @@ jobs:
       - name: Install full test dependencies
         run: |
           python -m pip install --upgrade pip
+          # Pin pycares<5.0.0 for compatibility with homeassistant's aiodns==3.5.0
+          pip install "pycares>=4.9.0,<5.0.0"
           pip install -r requirements.txt
           pip install pytest pytest-cov pytest-asyncio nox
 
