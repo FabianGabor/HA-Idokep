@@ -6,5 +6,5 @@ beautifulsoup4
 
 # Pin aiodns/pycares for Python 3.13 compatibility
 # See: https://github.com/saghul/aiodns/issues/107
-aiodns>=3.6.0
-pycares>=4.11.0
+# pycares 5.0.0 is incompatible with aiodns 3.5.0 (pinned by homeassistant)
+pycares>=4.9.0,<5.0.0
