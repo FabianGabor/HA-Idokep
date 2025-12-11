@@ -8,11 +8,11 @@ pytest-mock>=3.10.0
 pylint>=3.0.0
 pylint-per-file-ignores>=1.4.0
 
+# Nox for test automation
+nox>=2023.4.22
+
 # Dependencies for API client testing (lightweight)
 aiohttp>=3.8.0
 beautifulsoup4>=4.11.0
 
-# Pin aiodns/pycares for Python 3.13 compatibility
-# See: https://github.com/saghul/aiodns/issues/107
-# pycares 5.0.0 is incompatible with aiodns 3.5.0 (pinned by homeassistant)
 pycares>=4.9.0,<5.0.0

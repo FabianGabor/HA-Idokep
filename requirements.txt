@@ -3,8 +3,3 @@ homeassistant==2025.7.0
 pip>=21.3.1
 ruff==0.14.8
 beautifulsoup4
-
-# Pin aiodns/pycares for Python 3.13 compatibility
-# See: https://github.com/saghul/aiodns/issues/107
-# pycares 5.0.0 is incompatible with aiodns 3.5.0 (pinned by homeassistant)
-pycares>=4.9.0,<5.0.0
