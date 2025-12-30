@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import re
 from typing import TYPE_CHECKING
 
 from homeassistant.components.weather import (
@@ -15,6 +14,7 @@ from homeassistant.components.weather import (
 from homeassistant.components.weather.const import WeatherEntityFeature
 from homeassistant.helpers import sun
 from homeassistant.helpers.device_registry import DeviceInfo
+from slugify import slugify
 
 from .const import DOMAIN, NAME
 from .entity import IdokepEntity
@@ -52,18 +52,14 @@ class IdokepWeatherEntity(IdokepEntity, WeatherEntity):
         """Initialize the IdokepWeatherEntity with the given coordinator."""
         super().__init__(coordinator)
         location = coordinator.config_entry.data.get("location", "")
-        # Sanitize location for entity ID (remove special chars, etc.)
-        sanitized_location = re.sub(
-            r"[^a-zA-Z0-9_-]", "_", location.lower().replace(" ", "_").replace("-", "_")
-        )
-        # Remove multiple consecutive underscores
-        sanitized_location = re.sub(r"_+", "_", sanitized_location).strip("_")
+        # Sanitize location for entity ID using slugify (handles special chars properly)
+        sanitized_location = slugify(location, separator="_")
         # Fallback to 'unknown' if location becomes empty after sanitization
         if not sanitized_location:
             sanitized_location = "unknown"
 
-        # Set entity name to sanitized location for proper entity_id
-        self._attr_name = sanitized_location.replace("_", " ").title()
+        # Set entity name to original location for proper display
+        self._attr_name = location
         # Set the object_id to control the entity_id generation
         self._attr_object_id = f"idokep_{sanitized_location}"
         self._attr_unique_id = (
