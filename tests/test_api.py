@@ -332,7 +332,7 @@ class TestIdokepApiClientWeatherScraping:
             <div class="ik current-temperature">22°C</div>
             <div class="ik current-weather">Napos</div>
             <div class="ik current-weather-title">Jelenleg</div>
-            <div class="ik current-weather-short-desc d-block d-md-inline ms-md-2 mt-2 mt-xl-0">
+            <div class="ik current-weather-short-desc">
                 Kellemes idő várható ma.
             </div>
             <div>
@@ -685,7 +685,7 @@ class TestIdokepApiClientWeatherScraping:
     def test_parse_short_forecast(self, api_client: IdokepApiClient) -> None:
         """Test short forecast parsing with new HTML structure."""
         html = """
-        <div class="ik current-weather-short-desc d-block d-md-inline ms-md-2 mt-2 mt-xl-0">
+        <div class="ik current-weather-short-desc">
             Kezdetben hózáporok kialakulhatnak
         </div>
         <div class="pt-2">
