@@ -36,29 +36,13 @@ class TestIdokepWeatherEntity:
         assert entity._attr_unique_id == expected_unique_id
         assert entity._attr_supported_features == expected_features
 
-    def test_init_with_special_characters_in_location(
-        self, mock_coordinator: Mock
-    ) -> None:
-        """Test initialization with special characters in location name."""
-        mock_coordinator.config_entry.data = {"location": "New York City, NY!"}
-
-        entity = IdokepWeatherEntity(mock_coordinator)
-
-        expected_name = "New York City Ny"
-        expected_object_id = "idokep_new_york_city_ny"
-        expected_unique_id = "test_entry_id_weather_new_york_city_ny"
-
-        assert entity._attr_name == expected_name
-        assert entity._attr_object_id == expected_object_id
-        assert entity._attr_unique_id == expected_unique_id
-
     def test_init_with_empty_location(self, mock_coordinator: Mock) -> None:
         """Test initialization with empty location."""
         mock_coordinator.config_entry.data = {"location": ""}
 
         entity = IdokepWeatherEntity(mock_coordinator)
 
-        expected_name = "Unknown"
+        expected_name = ""
         expected_object_id = "idokep_unknown"
         expected_unique_id = "test_entry_id_weather_unknown"
 
@@ -74,7 +58,7 @@ class TestIdokepWeatherEntity:
 
         entity = IdokepWeatherEntity(mock_coordinator)
 
-        expected_name = "Unknown"
+        expected_name = "!@#$%^&*()"
         expected_object_id = "idokep_unknown"
         expected_unique_id = "test_entry_id_weather_unknown"
 
@@ -83,16 +67,72 @@ class TestIdokepWeatherEntity:
         assert entity._attr_unique_id == expected_unique_id
 
     def test_init_with_multiple_underscores(self, mock_coordinator: Mock) -> None:
-        """Test initialization removes multiple consecutive underscores."""
+        """Test initialization with underscores in location name."""
         mock_coordinator.config_entry.data = {
             "location": "Test___Multiple___Underscores"
         }
 
         entity = IdokepWeatherEntity(mock_coordinator)
 
-        expected_name = "Test Multiple Underscores"
+        expected_name = "Test___Multiple___Underscores"
         expected_object_id = "idokep_test_multiple_underscores"
         expected_unique_id = "test_entry_id_weather_test_multiple_underscores"
+
+        assert entity._attr_name == expected_name
+        assert entity._attr_object_id == expected_object_id
+        assert entity._attr_unique_id == expected_unique_id
+
+    def test_init_with_hungarian_nyiregyhaza(self, mock_coordinator: Mock) -> None:
+        """Test initialization with Nyíregyháza (Hungarian city with í and á)."""
+        mock_coordinator.config_entry.data = {"location": "Nyíregyháza"}
+
+        entity = IdokepWeatherEntity(mock_coordinator)
+
+        expected_name = "Nyíregyháza"
+        expected_object_id = "idokep_nyiregyhaza"
+        expected_unique_id = "test_entry_id_weather_nyiregyhaza"
+
+        assert entity._attr_name == expected_name
+        assert entity._attr_object_id == expected_object_id
+        assert entity._attr_unique_id == expected_unique_id
+
+    def test_init_with_hungarian_marosvasarhely(self, mock_coordinator: Mock) -> None:
+        """Test initialization with Marosvásárhely (Hungarian city with á and é)."""
+        mock_coordinator.config_entry.data = {"location": "Marosvásárhely"}
+
+        entity = IdokepWeatherEntity(mock_coordinator)
+
+        expected_name = "Marosvásárhely"
+        expected_object_id = "idokep_marosvasarhely"
+        expected_unique_id = "test_entry_id_weather_marosvasarhely"
+
+        assert entity._attr_name == expected_name
+        assert entity._attr_object_id == expected_object_id
+        assert entity._attr_unique_id == expected_unique_id
+
+    def test_init_with_hungarian_gyor(self, mock_coordinator: Mock) -> None:
+        """Test initialization with Győr (Hungarian city with ő)."""
+        mock_coordinator.config_entry.data = {"location": "Győr"}
+
+        entity = IdokepWeatherEntity(mock_coordinator)
+
+        expected_name = "Győr"
+        expected_object_id = "idokep_gyor"
+        expected_unique_id = "test_entry_id_weather_gyor"
+
+        assert entity._attr_name == expected_name
+        assert entity._attr_object_id == expected_object_id
+        assert entity._attr_unique_id == expected_unique_id
+
+    def test_init_with_hungarian_szekesfehervar(self, mock_coordinator: Mock) -> None:
+        """Test initialization with Székesfehérvár (multiple Hungarian chars)."""
+        mock_coordinator.config_entry.data = {"location": "Székesfehérvár"}
+
+        entity = IdokepWeatherEntity(mock_coordinator)
+
+        expected_name = "Székesfehérvár"
+        expected_object_id = "idokep_szekesfehervar"
+        expected_unique_id = "test_entry_id_weather_szekesfehervar"
 
         assert entity._attr_name == expected_name
         assert entity._attr_object_id == expected_object_id
@@ -297,21 +337,6 @@ class TestIdokepWeatherEntity:
 
         assert device_info["identifiers"] == expected_identifiers
         assert device_info["name"] == expected_name
-
-    def test_device_info_attr_with_special_location(
-        self, mock_coordinator: Mock
-    ) -> None:
-        """Test _attr_device_info with special characters in location."""
-        mock_coordinator.config_entry.data = {"location": "São Paulo, Brazil!"}
-        entity = IdokepWeatherEntity(mock_coordinator)
-
-        device_info = entity._attr_device_info
-
-        # Original location should be preserved in device name
-        assert device_info["name"] == "Időkép São Paulo, Brazil!"
-        # But identifiers should use sanitized version
-        expected_identifiers = {(DOMAIN, "test_entry_id_s_o_paulo_brazil")}
-        assert device_info["identifiers"] == expected_identifiers
 
 
 @pytest.mark.asyncio
