@@ -308,6 +308,14 @@ class CurrentWeatherParser(WeatherParser):
 
     def parse_short_forecast(self, soup: BeautifulSoup) -> str | None:
         """Extract short forecast text."""
+        # First try the new structure with current-weather-short-desc class
+        short_desc_div = soup.find("div", class_="current-weather-short-desc")
+        if isinstance(short_desc_div, Tag):
+            text = short_desc_div.get_text(strip=True)
+            if text:
+                return text
+
+        # Fallback to old structure for backwards compatibility
         for div in soup.find_all("div", class_="pt-2"):
             if not isinstance(div, Tag):
                 continue

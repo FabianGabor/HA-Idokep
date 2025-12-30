@@ -332,6 +332,9 @@ class TestIdokepApiClientWeatherScraping:
             <div class="ik current-temperature">22°C</div>
             <div class="ik current-weather">Napos</div>
             <div class="ik current-weather-title">Jelenleg</div>
+            <div class="ik current-weather-short-desc d-block d-md-inline ms-md-2 mt-2 mt-xl-0">
+                Kellemes idő várható ma.
+            </div>
             <div>
                 <img alt="Napkelte 06:30" />
                 Napkelte 06:30
@@ -340,7 +343,6 @@ class TestIdokepApiClientWeatherScraping:
                 <img alt="Napnyugta 19:45" />
                 Napnyugta 19:45
             </div>
-            <div class="pt-2">Kellemes idő várható ma.</div>
             <span class="ik mm">2 mm</span>
             <div>Csapadék esélye: 30%</div>
         </html>
@@ -423,12 +425,14 @@ class TestIdokepApiClientWeatherScraping:
             "weather_title",
             "sunrise",
             "sunset",
+            "short_forecast",
         }
         assert all(key in result for key in expected_keys)
         assert result["temperature"] == 22
         assert result["condition"] == "sunny"
         assert result["condition_hu"] == "Napos"
         assert result["weather_title"] == "Jelenleg"
+        assert result["short_forecast"] == "Kellemes idő várható ma."
 
     @pytest.mark.asyncio
     async def test_scrape_current_weather_network_error(
@@ -679,7 +683,24 @@ class TestIdokepApiClientWeatherScraping:
         assert isinstance(result, dict)
 
     def test_parse_short_forecast(self, api_client: IdokepApiClient) -> None:
-        """Test short forecast parsing."""
+        """Test short forecast parsing with new HTML structure."""
+        html = """
+        <div class="ik current-weather-short-desc d-block d-md-inline ms-md-2 mt-2 mt-xl-0">
+            Kezdetben hózáporok kialakulhatnak
+        </div>
+        <div class="pt-2">
+            <img src="icon.png" />
+        </div>
+        <div class="pt-2">Napkelte 06:30 Napnyugta 19:45</div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+
+        result = api_client._parse_short_forecast(soup)
+
+        assert result == "Kezdetben hózáporok kialakulhatnak"
+
+    def test_parse_short_forecast_fallback(self, api_client: IdokepApiClient) -> None:
+        """Test short forecast parsing with old HTML structure (fallback)."""
         html = """
         <div class="pt-2">
             <img src="icon.png" />
