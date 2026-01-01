@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import datetime
 import re
 import socket
@@ -401,10 +402,8 @@ class HourlyForecastParser(WeatherParser):
         temp_a = temp_div.find("a")
         temp = None
         if temp_a and isinstance(temp_a, Tag):
-            try:
+            with contextlib.suppress(ValueError):
                 temp = int(temp_a.text.strip())
-            except ValueError:
-                pass
 
         condition = self.extract_condition(card)
         precipitation, precipitation_probability = self.extract_precipitation_data(card)
