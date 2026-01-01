@@ -13,12 +13,14 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
+          ref: main
 
       - name: Setup Python
         uses: actions/setup-python@v6.1.0
@@ -85,82 +87,51 @@ jobs:
         with:
           category: integration
 
+      - name: Create version bump branch
+        run: |
+          BRANCH_NAME="release/v${{ steps.version.outputs.new }}"
+          git checkout -b "$BRANCH_NAME"
+          echo "branch=$BRANCH_NAME" >> $GITHUB_OUTPUT
+        id: branch
+
       - name: Commit version bump
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add custom_components/idokep/manifest.json
           git commit -m "Bump version to ${{ steps.version.outputs.new }}"
-          git push
+          git push -u origin ${{ steps.branch.outputs.branch }}
 
-      - name: Create and push tag
-        run: |
-          git tag ${{ steps.version.outputs.new }}
-          git push origin ${{ steps.version.outputs.new }}
-
-      - name: Create release assets
-        run: |
-          mkdir -p dist/custom_components
-          cp -r custom_components/idokep dist/custom_components/
-          find dist/custom_components/idokep -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
-          find dist/custom_components/idokep -name "*.pyc" -delete
-          find dist/custom_components/idokep -name ".pytest_cache" -type d -exec rm -rf {} + 2>/dev/null || true
-          cd dist
-          zip -r ../idokep-${{ steps.version.outputs.new }}.zip custom_components/idokep/
-
-      - name: Generate changelog
-        id: changelog
-        run: |
-          LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-
-          {
-            echo "CHANGELOG<<EOF"
-            echo "## 🚀 What's New in v${{ steps.version.outputs.new }}"
-            echo ""
-
-            if [ -n "$LAST_TAG" ]; then
-              echo "### 📋 Changes since $LAST_TAG"
-              git log --pretty=format:"- %s (%h)" "$LAST_TAG"..HEAD^ --no-merges | head -20
-            else
-              echo "### 📋 Initial Release"
-            fi
-
-            echo ""
-            echo "## 📦 Installation"
-            echo ""
-            echo "### 🏠 HACS (Recommended)"
-            echo "1. Open HACS in Home Assistant"
-            echo "2. Go to Integrations"
-            echo "3. Search for 'Időkép'"
-            echo "4. Click 'Download' or 'Update'"
-            echo "5. Restart Home Assistant"
-            echo ""
-            echo "### 📁 Manual Installation"
-            echo "1. Download \`idokep-${{ steps.version.outputs.new }}.zip\`"
-            echo "2. Extract to \`<config>/custom_components/\`"
-            echo "3. Restart Home Assistant"
-            echo ""
-            if [ -n "$LAST_TAG" ]; then
-              echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/$LAST_TAG...${{ steps.version.outputs.new }}"
-            fi
-            echo "EOF"
-          } >> $GITHUB_OUTPUT
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Create Pull Request
+        id: pr
+        uses: peter-evans/create-pull-request@v7
         with:
-          tag_name: ${{ steps.version.outputs.new }}
-          name: "Időkép v${{ steps.version.outputs.new }}"
-          body: ${{ steps.changelog.outputs.CHANGELOG }}
-          files: |
-            idokep-${{ steps.version.outputs.new }}.zip
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ steps.branch.outputs.branch }}
+          title: "Release v${{ steps.version.outputs.new }}"
+          body: |
+            ## 🚀 Version Bump to ${{ steps.version.outputs.new }}
 
-      - name: Success notification
+            This PR bumps the version from `${{ steps.version.outputs.current }}` to `${{ steps.version.outputs.new }}`.
+
+            ### ✅ Automated Checks Passed
+            - Tests passed
+            - HACS validation passed
+
+            ### 📋 Next Steps
+            1. Review and merge this PR
+            2. The release will be created automatically after merge
+          labels: release
+          assignees: ${{ github.actor }}
+
+      - name: Wait for PR merge
         run: |
-          echo "🎉 Release ${{ steps.version.outputs.new }} created successfully!"
-          echo "📦 HACS will detect this update automatically"
-          echo "🔗 Release URL: https://github.com/${{ github.repository }}/releases/tag/${{ steps.version.outputs.new }}"
+          echo "⏳ Waiting for PR to be merged..."
+          echo "🔗 PR URL: ${{ steps.pr.outputs.pull-request-url }}"
+          echo ""
+          echo "Once merged, the release workflow will automatically:"
+          echo "  1. Create the git tag"
+          echo "  2. Build the release assets"
+          echo "  3. Create the GitHub release"
+          echo ""
+          echo "⚠️  Do NOT create the tag manually - it will be created automatically!"

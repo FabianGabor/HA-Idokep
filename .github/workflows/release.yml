@@ -23,13 +23,13 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
           # Check if this version already exists as a tag
-          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+          if git rev-parse "$VERSION" >/dev/null 2>&1; then
             echo "exists=true" >> $GITHUB_OUTPUT
-            echo "❌ Version v$VERSION already exists as a tag!"
+            echo "❌ Version $VERSION already exists as a tag!"
             exit 1
           else
             echo "exists=false" >> $GITHUB_OUTPUT
-            echo "✅ New version v$VERSION detected"
+            echo "✅ New version $VERSION detected"
           fi
 
       - name: Setup Python
@@ -105,7 +105,7 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.version.outputs.version }}
+          tag_name: ${{ steps.version.outputs.version }}
           name: "Időkép v${{ steps.version.outputs.version }}"
           body: ${{ steps.changelog.outputs.CHANGELOG }}
           files: |
@@ -119,4 +119,4 @@ jobs:
         run: |
           echo "🎉 Release v${{ steps.version.outputs.version }} created successfully!"
           echo "📦 HACS users will be notified automatically"
-          echo "🔗 Release URL: https://github.com/${{ github.repository }}/releases/tag/v${{ steps.version.outputs.version }}"
+          echo "🔗 Release URL: https://github.com/${{ github.repository }}/releases/tag/${{ steps.version.outputs.version }}"
