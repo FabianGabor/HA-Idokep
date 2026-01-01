@@ -87,27 +87,14 @@ jobs:
         with:
           category: integration
 
-      - name: Create version bump branch
-        run: |
-          BRANCH_NAME="release/v${{ steps.version.outputs.new }}"
-          git checkout -b "$BRANCH_NAME"
-          echo "branch=$BRANCH_NAME" >> $GITHUB_OUTPUT
-        id: branch
-
-      - name: Commit version bump
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add custom_components/idokep/manifest.json
-          git commit -m "Bump version to ${{ steps.version.outputs.new }}"
-          git push -u origin ${{ steps.branch.outputs.branch }}
-
       - name: Create Pull Request
         id: pr
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ steps.branch.outputs.branch }}
+          branch: release/v${{ steps.version.outputs.new }}
+          base: main
+          commit-message: "Bump version to ${{ steps.version.outputs.new }}"
           title: "Release v${{ steps.version.outputs.new }}"
           body: |
             ## 🚀 Version Bump to ${{ steps.version.outputs.new }}
