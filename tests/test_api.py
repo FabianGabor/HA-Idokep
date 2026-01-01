@@ -364,7 +364,7 @@ class TestIdokepApiClientWeatherScraping:
             </div>
             <div class="ik new-hourly-forecast-card">
                 <div class="ik new-hourly-forecast-hour">15:00</div>
-                <div class="ik tempValue"><a>24</a></div>
+                <div class="ik tempValue"><a>-5</a></div>
                 <div class="forecast-icon-container">
                     <a data-bs-content="Borult"></a>
                 </div>
@@ -469,11 +469,17 @@ class TestIdokepApiClientWeatherScraping:
         forecast = result["hourly_forecast"]
         assert len(forecast) == 2
 
+        # Test positive temperature
         first_hour = forecast[0]
         assert first_hour["temperature"] == 25
         assert first_hour["condition"] == "sunny"
         assert first_hour["precipitation_probability"] == 20
         assert first_hour["precipitation"] == 5
+
+        # Test negative temperature
+        second_hour = forecast[1]
+        assert second_hour["temperature"] == -5
+        assert second_hour["condition"] == "cloudy"
 
     @pytest.mark.asyncio
     async def test_scrape_hourly_forecast_network_error(

@@ -400,8 +400,11 @@ class HourlyForecastParser(WeatherParser):
 
         temp_a = temp_div.find("a")
         temp = None
-        if temp_a and isinstance(temp_a, Tag) and temp_a.text.strip().isdigit():
-            temp = int(temp_a.text.strip())
+        if temp_a and isinstance(temp_a, Tag):
+            try:
+                temp = int(temp_a.text.strip())
+            except ValueError:
+                pass
 
         condition = self.extract_condition(card)
         precipitation, precipitation_probability = self.extract_precipitation_data(card)
