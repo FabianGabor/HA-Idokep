@@ -386,8 +386,10 @@ class TestIdokepApiClientWeatherScraping:
         return """
         <html>
             <div class="ik dailyForecastCol">
-                <div class="ik min"><a>15</a></div>
-                <div class="ik max"><a>25</a></div>
+                <div class="ik min-max-container">
+                    <div class="ik max"><a>25</a></div>
+                    <div class="ik min"><a>15</a></div>
+                </div>
                 <div class="ik dfIconAlert">
                     <a data-bs-content="popover-icon' src='icon.png'>Napos<"></a>
                 </div>
@@ -395,13 +397,28 @@ class TestIdokepApiClientWeatherScraping:
                 <span>15%</span>
             </div>
             <div class="ik dailyForecastCol">
-                <div class="ik min"><a>10</a></div>
-                <div class="ik max"><a>20</a></div>
+                <div class="ik min-max-container">
+                    <div class="ik max"><a>20</a></div>
+                    <div class="ik min"><a>10</a></div>
+                </div>
                 <div class="ik dfIconAlert">
                     <a data-bs-content="popover-icon' src='icon.png'>Eső<"></a>
                 </div>
                 <span class="ik mm">8 mm</span>
                 <span>80%</span>
+            </div>
+            <div class="ik dailyForecastCol">
+                <div class="ik min-max-container">
+                    <div class="ik min-max-close">
+                        <a>0</a>
+                        <a>-2</a>
+                    </div>
+                </div>
+                <div class="ik dfIconAlert">
+                    <a data-bs-content="popover-icon' src='icon.png'>Havazás<"></a>
+                </div>
+                <span class="ik mm">2 cm</span>
+                <span>5%</span>
             </div>
         </html>
         """
@@ -526,11 +543,20 @@ class TestIdokepApiClientWeatherScraping:
 
         assert "daily_forecast" in result
         forecast = result["daily_forecast"]
-        assert len(forecast) == 2
+        assert len(forecast) == 3
 
         first_day = forecast[0]
         assert first_day["temperature"] == 25  # max temp
         assert first_day["templow"] == 15  # min temp
+
+        second_day = forecast[1]
+        assert second_day["temperature"] == 20  # max temp
+        assert second_day["templow"] == 10  # min temp
+
+        # Test min-max-close structure (close temperatures)
+        third_day = forecast[2]
+        assert third_day["temperature"] == 0  # max temp
+        assert third_day["templow"] == -2  # min temp
         assert first_day["condition"] == "sunny"
         assert first_day["precipitation"] == 3
 
