@@ -380,6 +380,7 @@ class HourlyForecastParser(WeatherParser):
                 forecast.append(forecast_item)
 
         if forecast:
+            forecast.sort(key=lambda x: x["datetime"])
             result["hourly_forecast"] = forecast[:24]
 
         return result

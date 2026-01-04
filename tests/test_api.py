@@ -493,22 +493,30 @@ class TestIdokepApiClientWeatherScraping:
         forecast = result["hourly_forecast"]
         assert len(forecast) == 3
 
+        # Verify forecast is sorted chronologically
+        datetimes = [item["datetime"] for item in forecast]
+        assert datetimes == sorted(datetimes), (
+            "Forecast should be in chronological order"
+        )
+
+        # Find items by temperature to verify all data is present correctly
+        temp_25_item = next((f for f in forecast if f["temperature"] == 25), None)
+        temp_minus_5_item = next((f for f in forecast if f["temperature"] == -5), None)
+        temp_none_item = next((f for f in forecast if f["temperature"] is None), None)
+
         # Test positive temperature
-        first_hour = forecast[0]
-        assert first_hour["temperature"] == 25
-        assert first_hour["condition"] == "sunny"
-        assert first_hour["precipitation_probability"] == 20
-        assert first_hour["precipitation"] == 5
+        assert temp_25_item is not None
+        assert temp_25_item["condition"] == "sunny"
+        assert temp_25_item["precipitation_probability"] == 20
+        assert temp_25_item["precipitation"] == 5
 
         # Test negative temperature
-        second_hour = forecast[1]
-        assert second_hour["temperature"] == -5
-        assert second_hour["condition"] == "cloudy"
+        assert temp_minus_5_item is not None
+        assert temp_minus_5_item["condition"] == "cloudy"
 
         # Test invalid temperature (should be None)
-        third_hour = forecast[2]
-        assert third_hour["temperature"] is None
-        assert third_hour["condition"] == "cloudy"
+        assert temp_none_item is not None
+        assert temp_none_item["condition"] == "cloudy"
 
     @pytest.mark.asyncio
     async def test_scrape_hourly_forecast_network_error(
