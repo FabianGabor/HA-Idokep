@@ -380,6 +380,7 @@ class HourlyForecastParser(WeatherParser):
                 forecast.append(forecast_item)
 
         if forecast:
+            forecast.sort(key=lambda x: x["datetime"])
             result["hourly_forecast"] = forecast[:24]
 
         return result
@@ -537,8 +538,7 @@ class DailyForecastParser(WeatherParser):
         self, col: Tag, forecast_date: datetime.date
     ) -> dict[str, Any]:
         """Parse individual daily forecast column."""
-        min_temp = self.extract_temperature(col, "ik min")
-        max_temp = self.extract_temperature(col, "ik max")
+        min_temp, max_temp = self.extract_temperatures(col)
         condition = self.extract_condition(col)
         precipitation = self.extract_precipitation(col)
         precipitation_probability = self.extract_precipitation_probability(col)
@@ -552,13 +552,39 @@ class DailyForecastParser(WeatherParser):
             "precipitation_probability": precipitation_probability,
         }
 
+    def extract_temperatures(self, col: Tag) -> tuple[int | None, int | None]:
+        """
+        Extract min and max temperatures from column.
+
+        Returns:
+            tuple: (min_temp, max_temp)
+
+        """
+        # First check for min-max-close div (when temps are close together)
+        close_div = col.find("div", class_="ik min-max-close")
+        if close_div and isinstance(close_div, Tag):
+            a_tags = close_div.find_all("a")
+            min_required_tags = 2
+            if len(a_tags) >= min_required_tags:
+                # First <a> is max, second is min
+                max_match = re.search(r"(-?\d+)", a_tags[0].get_text(strip=True))
+                min_match = re.search(r"(-?\d+)", a_tags[1].get_text(strip=True))
+                max_temp = int(max_match.group(1)) if max_match else None
+                min_temp = int(min_match.group(1)) if min_match else None
+                return (min_temp, max_temp)
+
+        # Otherwise, look for separate max and min divs
+        min_temp = self.extract_temperature(col, "ik min")
+        max_temp = self.extract_temperature(col, "ik max")
+        return (min_temp, max_temp)
+
     def extract_temperature(self, col: Tag, class_name: str) -> int | None:
         """Extract temperature from column."""
         temp_div = col.find("div", class_=class_name)
         if temp_div and isinstance(temp_div, Tag):
             temp_a = temp_div.find("a")
             if temp_a and isinstance(temp_a, Tag):
-                match = re.search(r"(-?\d+)", temp_a.text)
+                match = re.search(r"(-?\d+)", temp_a.get_text(strip=True))
                 if match:
                     return int(match.group(1))
         return None

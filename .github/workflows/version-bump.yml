@@ -1,0 +1,124 @@
+name: Version Bump and Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'New version (e.g., 2025.12.3 or patch/minor/major)'
+        required: true
+        type: string
+
+jobs:
+  bump-version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+          ref: main
+
+      - name: Setup Python
+        uses: actions/setup-python@v6.1.0
+        with:
+          python-version: '3.13'
+
+      - name: Calculate new version
+        id: version
+        run: |
+          CURRENT_VERSION=$(cat custom_components/idokep/manifest.json | jq -r '.version')
+          INPUT_VERSION="${{ github.event.inputs.version }}"
+
+          # If input is a full version number, use it
+          if [[ $INPUT_VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            NEW_VERSION=$INPUT_VERSION
+          else
+            # Calculate based on patch/minor/major
+            IFS='.' read -r YEAR MONTH PATCH <<< "$CURRENT_VERSION"
+
+            case $INPUT_VERSION in
+              patch)
+                NEW_VERSION="$YEAR.$MONTH.$((PATCH + 1))"
+                ;;
+              minor)
+                NEW_VERSION="$YEAR.$((MONTH + 1)).0"
+                ;;
+              major)
+                NEW_VERSION="$((YEAR + 1)).1.0"
+                ;;
+              *)
+                echo "❌ Invalid version input: $INPUT_VERSION"
+                echo "Use format: YYYY.MM.P or patch/minor/major"
+                exit 1
+                ;;
+            esac
+          fi
+
+          echo "current=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "new=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "✅ Version bump: $CURRENT_VERSION → $NEW_VERSION"
+
+      - name: Check if version exists
+        run: |
+          if git rev-parse "${{ steps.version.outputs.new }}" >/dev/null 2>&1; then
+            echo "❌ Version ${{ steps.version.outputs.new }} already exists as a tag!"
+            exit 1
+          fi
+
+      - name: Update manifest.json
+        run: |
+          jq '.version = "${{ steps.version.outputs.new }}"' custom_components/idokep/manifest.json > manifest.tmp
+          mv manifest.tmp custom_components/idokep/manifest.json
+          echo "✅ Updated manifest.json to version ${{ steps.version.outputs.new }}"
+
+      - name: Install dependencies and run tests
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r test-requirements.txt
+          python -m pytest tests/ -v
+
+      - name: Validate HACS
+        uses: hacs/action@main
+        with:
+          category: integration
+
+      - name: Create Pull Request
+        id: pr
+        uses: peter-evans/create-pull-request@v8
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: release/v${{ steps.version.outputs.new }}
+          base: main
+          commit-message: "Bump version to ${{ steps.version.outputs.new }}"
+          title: "Release v${{ steps.version.outputs.new }}"
+          body: |
+            ## 🚀 Version Bump to ${{ steps.version.outputs.new }}
+
+            This PR bumps the version from `${{ steps.version.outputs.current }}` to `${{ steps.version.outputs.new }}`.
+
+            ### ✅ Automated Checks Passed
+            - Tests passed
+            - HACS validation passed
+
+            ### 📋 Next Steps
+            1. Review and merge this PR
+            2. The release will be created automatically after merge
+          labels: release
+          assignees: ${{ github.actor }}
+
+      - name: Wait for PR merge
+        run: |
+          echo "⏳ Waiting for PR to be merged..."
+          echo "🔗 PR URL: ${{ steps.pr.outputs.pull-request-url }}"
+          echo ""
+          echo "Once merged, the release workflow will automatically:"
+          echo "  1. Create the git tag"
+          echo "  2. Build the release assets"
+          echo "  3. Create the GitHub release"
+          echo ""
+          echo "⚠️  Do NOT create the tag manually - it will be created automatically!"
