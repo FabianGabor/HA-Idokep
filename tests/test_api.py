@@ -377,6 +377,14 @@ class TestIdokepApiClientWeatherScraping:
                     <a data-bs-content="Borult"></a>
                 </div>
             </div>
+            <div class="ik new-hourly-forecast-card">
+                <div class="ik new-hourly-forecast-hour">15:00</div>
+                <div class="ik tempValue"><a>-3</a></div>
+                <div class="forecast-icon-container">
+                    <a data-bs-content="Havazás"></a>
+                </div>
+                <div class="ik hourly-rain-chance"><a>10%</a></div>
+            </div>
         </html>
         """
 
@@ -419,6 +427,19 @@ class TestIdokepApiClientWeatherScraping:
                 </div>
                 <span class="ik mm">2 cm</span>
                 <span>5%</span>
+            </div>
+            <div class="ik dailyForecastCol">
+                <div class="ik min-max-container">
+                    <div class="ik min-max-closer">
+                        <a>-3</a>
+                        <a>-4</a>
+                    </div>
+                </div>
+                <div class="ik dfIconAlert">
+                    <a data-bs-content="popover-icon' src='icon.png'>Hófúvás<"></a>
+                </div>
+                <span class="ik mm">9 cm</span>
+                <span>0%</span>
             </div>
         </html>
         """
@@ -491,7 +512,7 @@ class TestIdokepApiClientWeatherScraping:
 
         assert "hourly_forecast" in result
         forecast = result["hourly_forecast"]
-        assert len(forecast) == 3
+        assert len(forecast) == 4
 
         # Verify forecast is sorted chronologically
         datetimes = [item["datetime"] for item in forecast]
@@ -502,6 +523,7 @@ class TestIdokepApiClientWeatherScraping:
         # Find items by temperature to verify all data is present correctly
         temp_25_item = next((f for f in forecast if f["temperature"] == 25), None)
         temp_minus_5_item = next((f for f in forecast if f["temperature"] == -5), None)
+        temp_minus_3_item = next((f for f in forecast if f["temperature"] == -3), None)
         temp_none_item = next((f for f in forecast if f["temperature"] is None), None)
 
         # Test positive temperature
@@ -513,6 +535,11 @@ class TestIdokepApiClientWeatherScraping:
         # Test negative temperature
         assert temp_minus_5_item is not None
         assert temp_minus_5_item["condition"] == "cloudy"
+
+        # Test second forecast (duplicate hour from test, different day)
+        assert temp_minus_3_item is not None
+        assert temp_minus_3_item["condition"] == "snowy"
+        assert temp_minus_3_item["precipitation_probability"] == 10
 
         # Test invalid temperature (should be None)
         assert temp_none_item is not None
@@ -551,7 +578,7 @@ class TestIdokepApiClientWeatherScraping:
 
         assert "daily_forecast" in result
         forecast = result["daily_forecast"]
-        assert len(forecast) == 3
+        assert len(forecast) == 4
 
         first_day = forecast[0]
         assert first_day["temperature"] == 25  # max temp
@@ -565,6 +592,11 @@ class TestIdokepApiClientWeatherScraping:
         third_day = forecast[2]
         assert third_day["temperature"] == 0  # max temp
         assert third_day["templow"] == -2  # min temp
+
+        # Test min-max-closer structure (very close temperatures)
+        fourth_day = forecast[3]
+        assert fourth_day["temperature"] == -3  # max temp
+        assert fourth_day["templow"] == -4  # min temp
         assert first_day["condition"] == "sunny"
         assert first_day["precipitation"] == 3
 
