@@ -453,10 +453,10 @@ class AlertParser(WeatherParser):
 
         return alerts
 
-    def _parse_hourly_alerts(self, soup: BeautifulSoup) -> list[AlertData]:
+    def _parse_hourly_alerts(self, soup: BeautifulSoup) -> list[AlertData]:  # noqa: PLR0912
         """Parse hourly forecast alert icons."""
-        alerts = []
-        seen_alerts = set()  # To avoid duplicates
+        # Map (level, type) to best alert
+        seen_alerts: dict[tuple[str, str], AlertData] = {}
 
         # Find all hourly alert containers
         alert_containers = soup.find_all("div", class_="genericHourlyAlert")
@@ -504,20 +504,29 @@ class AlertParser(WeatherParser):
             # Extract alert type
             alert_type = self._extract_alert_type(description)
 
-            # Avoid duplicate alerts
-            alert_key = (level, alert_type, description)
-            if alert_key not in seen_alerts:
-                seen_alerts.add(alert_key)
-                alerts.append(
-                    AlertData(
-                        level=level,
-                        type=alert_type,
-                        description=description,
-                        icon_url=icon_url,
-                    )
-                )
+            # Deduplicate by (level, type), keeping most complete info
+            alert_key = (level, alert_type)
+            new_alert = AlertData(
+                level=level,
+                type=alert_type,
+                description=description,
+                icon_url=icon_url,
+            )
 
-        return alerts
+            # Keep the alert with icon_url, or longer description
+            if alert_key not in seen_alerts:
+                seen_alerts[alert_key] = new_alert
+            else:
+                existing = seen_alerts[alert_key]
+                # Prefer alert with icon_url or longer description
+                should_replace = (new_alert.icon_url and not existing.icon_url) or (
+                    (new_alert.icon_url is not None) == (existing.icon_url is not None)
+                    and len(new_alert.description) > len(existing.description)
+                )
+                if should_replace:
+                    seen_alerts[alert_key] = new_alert
+
+        return list(seen_alerts.values())
 
     def _extract_alert_type(self, description: str) -> str:
         """Extract standardized alert type from description."""
