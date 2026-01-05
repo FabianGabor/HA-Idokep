@@ -1,9 +1,6 @@
 {
     "name": "Időkép",
-    "country": [
-        "hu"
-    ],
+    "country": "hu",
     "homeassistant": "2024.3.3",
-    "hacs": "2.0.1",
-    "render_readme": true
+    "hacs": "2.0.1"
 }
