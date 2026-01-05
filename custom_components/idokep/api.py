@@ -121,6 +121,7 @@ class WeatherConditionMapper:
         "eső": "rainy",
         "eső viharos széllel": "rainy",
         "köd": "fog",
+        "ködszitálás": "fog",
         "párás": "fog",
         "pára": "fog",
         "erős eső": "pouring",
