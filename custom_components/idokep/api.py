@@ -121,6 +121,7 @@ class WeatherConditionMapper:
         "eső": "rainy",
         "eső viharos széllel": "rainy",
         "köd": "fog",
+        "ködös": "fog",
         "ködszitálás": "fog",
         "párás": "fog",
         "pára": "fog",
@@ -372,22 +373,40 @@ class HourlyForecastParser(WeatherParser):
 
         hourly_cards = soup.find_all("div", class_="ik new-hourly-forecast-card")
 
+        last_hour = None
+        days_offset = 0
+
         for card in hourly_cards:
             if not isinstance(card, Tag):
                 continue
 
-            forecast_item = self._parse_hourly_card(card, current_hour, current_date)
+            forecast_item = self._parse_hourly_card(
+                card, current_hour, current_date, days_offset
+            )
             if forecast_item:
                 forecast.append(forecast_item)
+                # Track hour transitions to detect day changes
+                hour_div = card.find("div", class_="ik new-hourly-forecast-hour")
+                if hour_div and isinstance(hour_div, Tag):
+                    hour = hour_div.text.strip()
+                    hour_int = int(hour.split(":")[0])
+                    if last_hour is not None and hour_int < last_hour:
+                        days_offset += 1
+                    last_hour = hour_int
 
         if forecast:
+            # Sort by datetime to ensure chronological order
             forecast.sort(key=lambda x: x["datetime"])
-            result["hourly_forecast"] = forecast[:24]
+            result["hourly_forecast"] = forecast
 
         return result
 
     def _parse_hourly_card(
-        self, card: Tag, current_hour: int, current_date: datetime.date
+        self,
+        card: Tag,
+        current_hour: int,
+        current_date: datetime.date,
+        days_offset: int,
     ) -> dict[str, Any] | None:
         """Parse individual hourly forecast card."""
         hour_div = card.find("div", class_="ik new-hourly-forecast-hour")
@@ -411,7 +430,9 @@ class HourlyForecastParser(WeatherParser):
         precipitation, precipitation_probability = self.extract_precipitation_data(card)
 
         try:
-            dt = self.extract_datetime(current_hour, current_date, hour_div)
+            dt = self.extract_datetime(
+                current_hour, current_date, hour_div, days_offset
+            )
 
             return {
                 "datetime": dt.isoformat(),
@@ -424,15 +445,24 @@ class HourlyForecastParser(WeatherParser):
             return None
 
     def extract_datetime(
-        self, current_hour: int, current_date: datetime.date, hour_div: Tag
+        self,
+        current_hour: int,
+        current_date: datetime.date,
+        hour_div: Tag,
+        days_offset: int,
     ) -> datetime.datetime:
         """Calculate the forecast datetime based on hour and date."""
         hour = hour_div.text.strip()
         hour_int = int(hour.split(":")[0])
         minute_int = int(hour.split(":")[1]) if ":" in hour else 0
-        forecast_date = current_date
-        if hour_int < current_hour:
+
+        # Start with current date plus the days offset from tracking hour rollover
+        forecast_date = current_date + datetime.timedelta(days=days_offset)
+
+        # For the first day (days_offset==0), skip hours that have already passed
+        if days_offset == 0 and hour_int < current_hour:
             forecast_date = current_date + datetime.timedelta(days=1)
+
         return datetime.datetime.combine(
             forecast_date, datetime.time(hour_int, minute_int)
         )
@@ -561,8 +591,8 @@ class DailyForecastParser(WeatherParser):
             tuple: (min_temp, max_temp)
 
         """
-        # First check for min-max-close div (when temps are close together)
-        close_div = col.find("div", class_="ik min-max-close")
+        # First check for min-max-close or min-max-closer div (when temps are close)
+        close_div = col.find("div", class_=["ik min-max-close", "ik min-max-closer"])
         if close_div and isinstance(close_div, Tag):
             a_tags = close_div.find_all("a")
             min_required_tags = 2
