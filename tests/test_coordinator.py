@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
+from custom_components.idokep.api import IdokepApiClientConnectivityError
 from custom_components.idokep.coordinator import (
     IdokepDataUpdateCoordinator,
     NoWeatherDataError,
@@ -123,3 +124,87 @@ class TestIdokepDataUpdateCoordinator:
                 await coordinator._async_update_data()
 
             assert "Network error" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_async_update_data_connectivity_error_with_existing_data(
+        self, mock_hass: Mock
+    ) -> None:
+        """Test data update with connectivity error when there's existing data."""
+        logger = getLogger(__name__)
+        name = "test_coordinator"
+        update_interval = timedelta(minutes=30)
+        mock_config_entry = Mock()
+        mock_config_entry.data = {"location": "Budapest"}
+
+        # Patch the frame helper to avoid RuntimeError
+        with patch("homeassistant.helpers.frame.report_usage"):
+            coordinator = IdokepDataUpdateCoordinator(
+                mock_hass, logger, name, update_interval, mock_config_entry
+            )
+
+            # Set existing data
+            existing_data = {"temperature": 20.0, "condition": "cloudy"}
+            coordinator.data = existing_data
+
+            # Mock the _fetch_weather_data method to raise connectivity error
+            coordinator._fetch_weather_data = AsyncMock(
+                side_effect=IdokepApiClientConnectivityError("Connection refused")
+            )
+
+            # Should return existing data when connectivity fails
+            result = await coordinator._async_update_data()
+
+            assert result == existing_data
+
+    @pytest.mark.asyncio
+    async def test_async_update_data_connectivity_error_without_existing_data(
+        self, mock_hass: Mock
+    ) -> None:
+        """Test data update with connectivity error when there's no existing data."""
+        logger = getLogger(__name__)
+        name = "test_coordinator"
+        update_interval = timedelta(minutes=30)
+        mock_config_entry = Mock()
+        mock_config_entry.data = {"location": "Budapest"}
+
+        # Patch the frame helper to avoid RuntimeError
+        with patch("homeassistant.helpers.frame.report_usage"):
+            coordinator = IdokepDataUpdateCoordinator(
+                mock_hass, logger, name, update_interval, mock_config_entry
+            )
+
+            # Mock the _fetch_weather_data method to raise connectivity error
+            coordinator._fetch_weather_data = AsyncMock(
+                side_effect=IdokepApiClientConnectivityError("Connection refused")
+            )
+
+            # Should return empty dict when connectivity fails and no existing data
+            result = await coordinator._async_update_data()
+
+            assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_fetch_weather_data_empty_response(self, mock_hass: Mock) -> None:
+        """Test _fetch_weather_data raises NoWeatherDataError on empty response."""
+        logger = getLogger(__name__)
+        name = "test_coordinator"
+        update_interval = timedelta(minutes=30)
+        mock_config_entry = Mock()
+        mock_config_entry.data = {"location": "Budapest"}
+
+        # Patch the frame helper to avoid RuntimeError
+        with patch("homeassistant.helpers.frame.report_usage"):
+            coordinator = IdokepDataUpdateCoordinator(
+                mock_hass, logger, name, update_interval, mock_config_entry
+            )
+
+            # Mock the API client to return None (no data)
+            mock_client = AsyncMock()
+            mock_client.async_get_weather_data = AsyncMock(return_value=None)
+            mock_config_entry.runtime_data = Mock(client=mock_client)
+
+            # Should raise NoWeatherDataError when API returns None
+            with pytest.raises(NoWeatherDataError) as exc_info:
+                await coordinator._fetch_weather_data("Budapest")
+
+            assert "No weather data found for location: Budapest" in str(exc_info.value)
