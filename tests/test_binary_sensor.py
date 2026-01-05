@@ -42,7 +42,9 @@ class TestIdokepBinarySensor:
 
         # Get the entities that were added
         added_entities = list(mock_async_add_entities.call_args[0][0])
-        assert len(added_entities) == 2
+        # Now we have 6 sensors: connectivity, storm_expected_1h, weather_alert,
+        # alert_yellow, alert_orange, alert_red
+        assert len(added_entities) == 6
 
         # Verify the entity is of correct type
         entity = added_entities[0]

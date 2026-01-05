@@ -50,6 +50,16 @@ class HourlyForecastItem:
 
 
 @dataclass
+class AlertData:
+    """Single weather alert."""
+
+    level: str  # "yellow", "orange", "red"
+    type: str  # Alert type (e.g., "ónos eső", "vihar", "szél")
+    description: str  # Full description
+    icon_url: str | None = None  # URL to alert icon
+
+
+@dataclass
 class DailyForecastItem:
     """Single daily forecast item."""
 
@@ -362,6 +372,177 @@ class CurrentWeatherParser(WeatherParser):
                     break
 
         return result
+
+
+class AlertParser(WeatherParser):
+    """Parser for weather alerts."""
+
+    # Mapping of Hungarian alert types to English names
+    ALERT_TYPE_MAP: ClassVar[dict[str, str]] = {
+        "ónos eső": "freezing_rain",
+        "ónosesőre": "freezing_rain",
+        "vihar": "storm",
+        "zivatar": "thunderstorm",
+        "szél": "wind",
+        "hó": "snow",
+        "eső": "rain",
+        "köd": "fog",
+        "hőség": "heat",
+        "hideg": "cold",
+        "fagy": "frost",
+    }
+
+    def parse(self, soup: BeautifulSoup) -> dict[str, Any]:
+        """Parse weather alerts from page."""
+        result: dict[str, Any] = {"alerts": []}
+
+        # Parse general alert bar
+        general_alerts = self._parse_general_alert(soup)
+        result["alerts"].extend(general_alerts)
+
+        # Parse hourly forecast alerts
+        hourly_alerts = self._parse_hourly_alerts(soup)
+        result["alerts"].extend(hourly_alerts)
+
+        # Organize alerts by level
+        result["alerts_by_level"] = self._organize_by_level(result["alerts"])
+
+        return result
+
+    def _parse_general_alert(self, soup: BeautifulSoup) -> list[AlertData]:
+        """Parse the general alert bar at top of page."""
+        alerts = []
+        alert_bar = soup.find("div", id="topalertbar")
+
+        if not alert_bar or not isinstance(alert_bar, Tag):
+            return alerts
+
+        # Determine alert level from class
+        level = None
+        class_attr = alert_bar.get("class", [])
+        if isinstance(class_attr, list):
+            if "yellow" in class_attr:
+                level = "yellow"
+            elif "orange" in class_attr:
+                level = "orange"
+            elif "red" in class_attr:
+                level = "red"
+
+        if not level:
+            return alerts
+
+        # Extract alert text
+        link = alert_bar.find("a")
+        if link and isinstance(link, Tag):
+            description = link.get_text(strip=True)
+            # Remove the icon text
+            description = re.sub(r"^[\s\S]*?riasztás", "riasztás", description)
+            description = description.strip()
+
+            # Extract alert type
+            alert_type = self._extract_alert_type(description)
+
+            alerts.append(
+                AlertData(
+                    level=level,
+                    type=alert_type,
+                    description=description,
+                    icon_url=None,
+                )
+            )
+
+        return alerts
+
+    def _parse_hourly_alerts(self, soup: BeautifulSoup) -> list[AlertData]:
+        """Parse hourly forecast alert icons."""
+        alerts = []
+        seen_alerts = set()  # To avoid duplicates
+
+        # Find all hourly alert containers
+        alert_containers = soup.find_all("div", class_="genericHourlyAlert")
+
+        for container in alert_containers:
+            if not isinstance(container, Tag):
+                continue
+
+            # Find the alert link/image
+            alert_link = container.find("a", class_="hover-over")
+            if not alert_link or not isinstance(alert_link, Tag):
+                continue
+
+            # Extract alert description from data-bs-content
+            description = alert_link.get("data-bs-content", "")
+            if not description or not isinstance(description, str):
+                continue
+
+            # Determine level from description
+            level = None
+            if "Sárga" in description or "sárga" in description:
+                level = "yellow"
+            elif "Narancs" in description or "narancs" in description:
+                level = "orange"
+            elif (
+                "Piros" in description
+                or "piros" in description
+                or "Vörös" in description
+            ):
+                level = "red"
+
+            if not level:
+                continue
+
+            # Extract icon URL
+            img = alert_link.find("img", class_="forecast-alert-icon")
+            icon_url = None
+            if img and isinstance(img, Tag):
+                src = img.get("src")
+                if src and isinstance(src, str):
+                    icon_url = (
+                        f"https://www.idokep.hu{src}" if src.startswith("/") else src
+                    )
+
+            # Extract alert type
+            alert_type = self._extract_alert_type(description)
+
+            # Avoid duplicate alerts
+            alert_key = (level, alert_type, description)
+            if alert_key not in seen_alerts:
+                seen_alerts.add(alert_key)
+                alerts.append(
+                    AlertData(
+                        level=level,
+                        type=alert_type,
+                        description=description,
+                        icon_url=icon_url,
+                    )
+                )
+
+        return alerts
+
+    def _extract_alert_type(self, description: str) -> str:
+        """Extract standardized alert type from description."""
+        description_lower = description.lower()
+
+        for hungarian, english in self.ALERT_TYPE_MAP.items():
+            if hungarian in description_lower:
+                return english
+
+        # Default to generic alert
+        return "general"
+
+    def _organize_by_level(self, alerts: list[AlertData]) -> dict[str, list[dict]]:
+        """Organize alerts by severity level."""
+        by_level = {"yellow": [], "orange": [], "red": []}
+
+        for alert in alerts:
+            alert_dict = {
+                "type": alert.type,
+                "description": alert.description,
+                "icon_url": alert.icon_url,
+            }
+            by_level[alert.level].append(alert_dict)
+
+        return by_level
 
 
 class HourlyForecastParser(WeatherParser):
@@ -700,6 +881,7 @@ class IdokepApiClient:
         self._current_parser = CurrentWeatherParser()
         self._hourly_parser = HourlyForecastParser()
         self._daily_parser = DailyForecastParser()
+        self._alert_parser = AlertParser()
 
     async def check_connectivity(self) -> bool:
         """Check if idokep.hu is reachable."""
@@ -727,6 +909,7 @@ class IdokepApiClient:
                 self._scrape_current_weather(urls[0]),
                 self._scrape_hourly_forecast(urls[1]),
                 self._scrape_daily_forecast(urls[2]),
+                self._scrape_alerts(urls[1]),  # Alerts are on hourly forecast page
                 return_exceptions=True,
             )
 
@@ -788,6 +971,18 @@ class IdokepApiClient:
         """Scrape daily forecast data."""
         try:
             return await self._scrape_and_parse(url, self._daily_parser)
+        except (
+            aiohttp.ClientError,
+            TimeoutError,
+            socket.gaierror,
+            IdokepApiClientCommunicationError,
+        ):
+            return {}
+
+    async def _scrape_alerts(self, url: str) -> dict[str, Any]:
+        """Scrape weather alerts from hourly forecast page."""
+        try:
+            return await self._scrape_and_parse(url, self._alert_parser)
         except (
             aiohttp.ClientError,
             TimeoutError,

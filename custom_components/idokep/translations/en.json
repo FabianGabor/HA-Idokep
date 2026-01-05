@@ -38,6 +38,26 @@
             "short_forecast": {
                 "name": "Short Forecast"
             }
+        },
+        "binary_sensor": {
+            "idokep_connectivity": {
+                "name": "Időkép Connectivity"
+            },
+            "storm_expected_1h": {
+                "name": "Storm Expected in Next Hour"
+            },
+            "weather_alert": {
+                "name": "Weather Alert"
+            },
+            "alert_yellow": {
+                "name": "Yellow Weather Alert"
+            },
+            "alert_orange": {
+                "name": "Orange Weather Alert"
+            },
+            "alert_red": {
+                "name": "Red Weather Alert"
+            }
         }
     }
 }
