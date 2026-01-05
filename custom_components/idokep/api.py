@@ -130,6 +130,8 @@ class WeatherConditionMapper:
         "havazás": "snowy",
         "intenzív havazás": "snowy",
         "hószállingózás": "snowy",
+        "hófúvás": "snowy",
+        "hózápor": "snowy",
         "havas eső": "snowy-rainy",
         "fagyott eső": "snowy-rainy",
         "szeles": "windy",
