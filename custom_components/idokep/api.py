@@ -128,6 +128,7 @@ class WeatherConditionMapper:
         "erős eső": "pouring",
         "jégeső": "hail",
         "havazás": "snowy",
+        "intenzív havazás": "snowy",
         "hószállingózás": "snowy",
         "havas eső": "snowy-rainy",
         "fagyott eső": "snowy-rainy",
