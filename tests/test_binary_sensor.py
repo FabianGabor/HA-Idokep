@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import datetime
+from datetime import timedelta
 from unittest.mock import Mock
 
 import pytest
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass
 from homeassistant.core import HomeAssistant
 
+from custom_components.idokep.api import AlertData
 from custom_components.idokep.binary_sensor import (
     ENTITY_DESCRIPTIONS,
     IdokepBinarySensor,
@@ -132,8 +135,6 @@ class TestIdokepBinarySensor:
 
     def test_alert_sensors_is_on(self, mock_coordinator: Mock) -> None:
         """Test alert sensors is_on with alerts present."""
-        from custom_components.idokep.api import AlertData
-
         # Setup coordinator data with alerts
         mock_coordinator.data = {
             "alerts": [
@@ -231,8 +232,6 @@ class TestIdokepBinarySensor:
 
     def test_weather_alert_extra_state_attributes(self, mock_coordinator: Mock) -> None:
         """Test extra_state_attributes for weather_alert sensor."""
-        from custom_components.idokep.api import AlertData
-
         # Setup coordinator data with alerts
         mock_coordinator.data = {
             "alerts": [
@@ -347,8 +346,6 @@ class TestIdokepBinarySensor:
 
     def test_storm_expected_next_hour_is_on(self, mock_coordinator: Mock) -> None:
         """Test storm_expected_1h sensor with storm in forecast."""
-        import datetime
-
         now = datetime.datetime.now(datetime.UTC)
         next_30_min = now + datetime.timedelta(minutes=30)
 
@@ -373,8 +370,6 @@ class TestIdokepBinarySensor:
 
     def test_storm_expected_next_hour_is_off(self, mock_coordinator: Mock) -> None:
         """Test storm_expected_1h sensor with no storm in forecast."""
-        import datetime
-
         now = datetime.datetime.now(datetime.UTC)
         in_two_hours = now + datetime.timedelta(hours=2)
 
@@ -485,10 +480,8 @@ class TestIdokepBinarySensor:
         self, mock_coordinator: Mock
     ) -> None:
         """Test storm detection with timezone-naive datetime in forecast."""
-        from datetime import datetime, timedelta, timezone
-
         # Get current time
-        now = datetime.now(timezone.utc)
+        now = datetime.datetime.now(datetime.UTC)
         # Create a timezone-naive datetime string for 30 minutes from now
         future_time = now + timedelta(minutes=30)
         naive_datetime_str = future_time.replace(tzinfo=None).isoformat()
