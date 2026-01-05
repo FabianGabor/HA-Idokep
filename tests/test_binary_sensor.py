@@ -342,7 +342,7 @@ class TestIdokepBinarySensor:
         )
 
         attrs = binary_sensor.extra_state_attributes
-        assert attrs == {}
+        assert not attrs
 
     def test_storm_expected_next_hour_is_on(self, mock_coordinator: Mock) -> None:
         """Test storm_expected_1h sensor with storm in forecast."""
