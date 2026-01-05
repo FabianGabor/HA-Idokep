@@ -47,6 +47,18 @@
             "storm_expected_1h": {
                 "name": "Vihar várható az elkövetkező órában",
                 "device_class": "safety"
+            },
+            "weather_alert": {
+                "name": "Időjárási riasztás"
+            },
+            "alert_yellow": {
+                "name": "Sárga időjárási riasztás"
+            },
+            "alert_orange": {
+                "name": "Narancs időjárási riasztás"
+            },
+            "alert_red": {
+                "name": "Piros időjárási riasztás"
             }
         }
     }
