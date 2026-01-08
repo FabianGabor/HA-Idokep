@@ -553,35 +553,36 @@ class HourlyForecastParser(WeatherParser):
         result = {}
         forecast = []
         now = datetime.datetime.now(tz=datetime.UTC)
-        current_hour = now.hour
-        current_date = now.date()
+
+        # Start from tomorrow at midnight as the base date
+        base_date = (now + datetime.timedelta(days=1)).date()
 
         hourly_cards = soup.find_all("div", class_="ik new-hourly-forecast-card")
 
         last_hour = None
-        days_offset = 0
+        current_date = base_date
 
         for card in hourly_cards:
             if not isinstance(card, Tag):
                 continue
 
-            forecast_item = self._parse_hourly_card(
-                card, current_hour, current_date, days_offset
-            )
+            # Extract hour first to detect day transitions
+            hour_div = card.find("div", class_="ik new-hourly-forecast-hour")
+            if hour_div and isinstance(hour_div, Tag):
+                hour_text = hour_div.text.strip()
+                hour_int = int(hour_text.split(":")[0])
+
+                # If hour decreased, we moved to next day
+                if last_hour is not None and hour_int < last_hour:
+                    current_date += datetime.timedelta(days=1)
+
+                last_hour = hour_int
+
+            forecast_item = self._parse_hourly_card(card, hour_div, current_date)
             if forecast_item:
                 forecast.append(forecast_item)
-                # Track hour transitions to detect day changes
-                hour_div = card.find("div", class_="ik new-hourly-forecast-hour")
-                if hour_div and isinstance(hour_div, Tag):
-                    hour = hour_div.text.strip()
-                    hour_int = int(hour.split(":")[0])
-                    if last_hour is not None and hour_int < last_hour:
-                        days_offset += 1
-                    last_hour = hour_int
 
         if forecast:
-            # Sort by datetime to ensure chronological order
-            forecast.sort(key=lambda x: x["datetime"])
             result["hourly_forecast"] = forecast
 
         return result
@@ -589,12 +590,10 @@ class HourlyForecastParser(WeatherParser):
     def _parse_hourly_card(
         self,
         card: Tag,
-        current_hour: int,
-        current_date: datetime.date,
-        days_offset: int,
+        hour_div: Tag | None,
+        forecast_date: datetime.date,
     ) -> dict[str, Any] | None:
         """Parse individual hourly forecast card."""
-        hour_div = card.find("div", class_="ik new-hourly-forecast-hour")
         temp_div = card.find("div", class_="ik tempValue")
 
         if not (
@@ -615,8 +614,13 @@ class HourlyForecastParser(WeatherParser):
         precipitation, precipitation_probability = self.extract_precipitation_data(card)
 
         try:
-            dt = self.extract_datetime(
-                current_hour, current_date, hour_div, days_offset
+            # Extract time and combine with the provided date
+            hour_text = hour_div.text.strip()
+            hour_int = int(hour_text.split(":")[0])
+            minute_int = int(hour_text.split(":")[1]) if ":" in hour_text else 0
+
+            dt = datetime.datetime.combine(
+                forecast_date, datetime.time(hour_int, minute_int)
             )
 
             return {
@@ -628,29 +632,6 @@ class HourlyForecastParser(WeatherParser):
             }
         except (ValueError, IndexError):
             return None
-
-    def extract_datetime(
-        self,
-        current_hour: int,
-        current_date: datetime.date,
-        hour_div: Tag,
-        days_offset: int,
-    ) -> datetime.datetime:
-        """Calculate the forecast datetime based on hour and date."""
-        hour = hour_div.text.strip()
-        hour_int = int(hour.split(":")[0])
-        minute_int = int(hour.split(":")[1]) if ":" in hour else 0
-
-        # Start with current date plus the days offset from tracking hour rollover
-        forecast_date = current_date + datetime.timedelta(days=days_offset)
-
-        # For the first day (days_offset==0), skip hours that have already passed
-        if days_offset == 0 and hour_int < current_hour:
-            forecast_date = current_date + datetime.timedelta(days=1)
-
-        return datetime.datetime.combine(
-            forecast_date, datetime.time(hour_int, minute_int)
-        )
 
     def extract_condition(self, card: Tag) -> str | None:
         """Extract weather condition from the icon container tag."""

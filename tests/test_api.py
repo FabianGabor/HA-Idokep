@@ -350,41 +350,51 @@ class TestIdokepApiClientWeatherScraping:
 
     @pytest.fixture
     def sample_hourly_forecast_html(self) -> str:
-        """Sample HTML for hourly forecast page."""
-        return """
+        """
+        Sample HTML for hourly forecast page.
+
+        Covers 36 hours: Day 1 (0-23h) + Day 2 (0-11h).
+        """
+        # Generate 24 hours for Day 1 (0-23)
+        day1_cards = []
+        for hour in range(24):
+            temp = 10 - hour  # Temperature decreasing through the day
+            condition = "Napos" if hour < 12 else "Borult"
+            rain_chance = 10 + (hour * 2)
+            rain_level = 3 if hour < 12 else 5
+            day1_cards.append(f"""
+            <div class="ik new-hourly-forecast-card">
+                <div class="ik new-hourly-forecast-hour">{hour:02d}:00</div>
+                <div class="ik tempValue"><a>{temp}</a></div>
+                <div class="forecast-icon-container">
+                    <a data-bs-content="{condition}"></a>
+                </div>
+                <div class="ik hourly-rain-chance"><a>{rain_chance}%</a></div>
+                <div class="ik rainlevel-{rain_level}"></div>
+            </div>""")
+
+        # Generate 12 hours for Day 2 (0-11)
+        day2_cards = []
+        for hour in range(12):
+            temp = -5 - hour  # Colder second day
+            condition = "Havazás" if hour < 6 else "Hófúvás"
+            rain_chance = 50 + (hour * 3)
+            rain_level = 7 if hour < 6 else 9
+            day2_cards.append(f"""
+            <div class="ik new-hourly-forecast-card">
+                <div class="ik new-hourly-forecast-hour">{hour:02d}:00</div>
+                <div class="ik tempValue"><a>{temp}</a></div>
+                <div class="forecast-icon-container">
+                    <a data-bs-content="{condition}"></a>
+                </div>
+                <div class="ik hourly-rain-chance"><a>{rain_chance}%</a></div>
+                <div class="ik rainlevel-{rain_level}"></div>
+            </div>""")
+
+        all_cards = "".join(day1_cards + day2_cards)
+        return f"""
         <html>
-            <div class="ik new-hourly-forecast-card">
-                <div class="ik new-hourly-forecast-hour">14:00</div>
-                <div class="ik tempValue"><a>25</a></div>
-                <div class="forecast-icon-container">
-                    <a data-bs-content="Napos"></a>
-                </div>
-                <div class="ik hourly-rain-chance"><a>20%</a></div>
-                <div class="ik rainlevel-5"></div>
-            </div>
-            <div class="ik new-hourly-forecast-card">
-                <div class="ik new-hourly-forecast-hour">15:00</div>
-                <div class="ik tempValue"><a>-5</a></div>
-                <div class="forecast-icon-container">
-                    <a data-bs-content="Borult"></a>
-                </div>
-                <div class="ik hourly-rain-chance"><a>0%</a></div>
-            </div>
-            <div class="ik new-hourly-forecast-card">
-                <div class="ik new-hourly-forecast-hour">16:00</div>
-                <div class="ik tempValue"><a>invalid</a></div>
-                <div class="forecast-icon-container">
-                    <a data-bs-content="Borult"></a>
-                </div>
-            </div>
-            <div class="ik new-hourly-forecast-card">
-                <div class="ik new-hourly-forecast-hour">15:00</div>
-                <div class="ik tempValue"><a>-3</a></div>
-                <div class="forecast-icon-container">
-                    <a data-bs-content="Havazás"></a>
-                </div>
-                <div class="ik hourly-rain-chance"><a>10%</a></div>
-            </div>
+            {all_cards}
         </html>
         """
 
@@ -498,7 +508,7 @@ class TestIdokepApiClientWeatherScraping:
         mock_session: Mock,
         sample_hourly_forecast_html: str,
     ) -> None:
-        """Test successful hourly forecast scraping."""
+        """Test successful hourly forecast scraping with 36 hours."""
         mock_response = AsyncMock()
         mock_response.raise_for_status = Mock()
         mock_response.text = AsyncMock(return_value=sample_hourly_forecast_html)
@@ -512,7 +522,7 @@ class TestIdokepApiClientWeatherScraping:
 
         assert "hourly_forecast" in result
         forecast = result["hourly_forecast"]
-        assert len(forecast) == 4
+        assert len(forecast) == 36, "Should have 36 hourly forecast items"
 
         # Verify forecast is sorted chronologically
         datetimes = [item["datetime"] for item in forecast]
@@ -520,30 +530,39 @@ class TestIdokepApiClientWeatherScraping:
             "Forecast should be in chronological order"
         )
 
-        # Find items by temperature to verify all data is present correctly
-        temp_25_item = next((f for f in forecast if f["temperature"] == 25), None)
-        temp_minus_5_item = next((f for f in forecast if f["temperature"] == -5), None)
-        temp_minus_3_item = next((f for f in forecast if f["temperature"] == -3), None)
-        temp_none_item = next((f for f in forecast if f["temperature"] is None), None)
+        # Verify first hour (Day 1, 00:00)
+        first_item = forecast[0]
+        assert first_item["temperature"] == 10
+        assert first_item["condition"] == "sunny"
+        assert first_item["precipitation_probability"] == 10
+        assert first_item["precipitation"] == 3
 
-        # Test positive temperature
-        assert temp_25_item is not None
-        assert temp_25_item["condition"] == "sunny"
-        assert temp_25_item["precipitation_probability"] == 20
-        assert temp_25_item["precipitation"] == 5
+        # Verify last hour of Day 1 (23:00)
+        day1_last = forecast[23]
+        assert day1_last["temperature"] == 10 - 23
+        assert day1_last["condition"] == "cloudy"
+        assert day1_last["precipitation_probability"] == 10 + (23 * 2)
+        assert day1_last["precipitation"] == 5
 
-        # Test negative temperature
-        assert temp_minus_5_item is not None
-        assert temp_minus_5_item["condition"] == "cloudy"
+        # Verify first hour of Day 2 (00:00, item 24)
+        day2_first = forecast[24]
+        assert day2_first["temperature"] == -5
+        assert day2_first["condition"] == "snowy"
+        assert day2_first["precipitation_probability"] == 50
+        assert day2_first["precipitation"] == 7
 
-        # Test second forecast (duplicate hour from test, different day)
-        assert temp_minus_3_item is not None
-        assert temp_minus_3_item["condition"] == "snowy"
-        assert temp_minus_3_item["precipitation_probability"] == 10
+        # Verify last hour (Day 2, 11:00)
+        last_item = forecast[35]
+        assert last_item["temperature"] == -5 - 11
+        assert last_item["condition"] == "snowy"
+        assert last_item["precipitation_probability"] == 50 + (11 * 3)
+        assert last_item["precipitation"] == 9
 
-        # Test invalid temperature (should be None)
-        assert temp_none_item is not None
-        assert temp_none_item["condition"] == "cloudy"
+        # Verify day transition: Day 2's 00:00 should be after Day 1's 23:00
+        day1_dt = datetime.fromisoformat(day1_last["datetime"])
+        day2_dt = datetime.fromisoformat(day2_first["datetime"])
+        assert day2_dt > day1_dt
+        assert (day2_dt - day1_dt).total_seconds() == 3600
 
     @pytest.mark.asyncio
     async def test_scrape_hourly_forecast_network_error(
@@ -556,6 +575,84 @@ class TestIdokepApiClientWeatherScraping:
             result = await api_client._scrape_hourly_forecast("http://test.com")
 
         assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_scrape_hourly_forecast_day_transition(
+        self,
+        api_client: IdokepApiClient,
+        mock_session: Mock,
+    ) -> None:
+        """Test hourly forecast correctly handles day transitions."""
+        # Create HTML with explicit day transition: 22:00, 23:00, 00:00, 01:00
+        html = """
+        <html>
+            <div class="ik new-hourly-forecast-card">
+                <div class="ik new-hourly-forecast-hour">22:00</div>
+                <div class="ik tempValue"><a>5</a></div>
+                <div class="forecast-icon-container">
+                    <a data-bs-content="Napos"></a>
+                </div>
+                <div class="ik hourly-rain-chance"><a>10%</a></div>
+                <div class="ik rainlevel-3"></div>
+            </div>
+            <div class="ik new-hourly-forecast-card">
+                <div class="ik new-hourly-forecast-hour">23:00</div>
+                <div class="ik tempValue"><a>4</a></div>
+                <div class="forecast-icon-container">
+                    <a data-bs-content="Napos"></a>
+                </div>
+                <div class="ik hourly-rain-chance"><a>15%</a></div>
+                <div class="ik rainlevel-3"></div>
+            </div>
+            <div class="ik new-hourly-forecast-card">
+                <div class="ik new-hourly-forecast-hour">00:00</div>
+                <div class="ik tempValue"><a>3</a></div>
+                <div class="forecast-icon-container">
+                    <a data-bs-content="Borult"></a>
+                </div>
+                <div class="ik hourly-rain-chance"><a>20%</a></div>
+                <div class="ik rainlevel-5"></div>
+            </div>
+            <div class="ik new-hourly-forecast-card">
+                <div class="ik new-hourly-forecast-hour">01:00</div>
+                <div class="ik tempValue"><a>2</a></div>
+                <div class="forecast-icon-container">
+                    <a data-bs-content="Borult"></a>
+                </div>
+                <div class="ik hourly-rain-chance"><a>25%</a></div>
+                <div class="ik rainlevel-5"></div>
+            </div>
+        </html>
+        """
+
+        mock_response = AsyncMock()
+        mock_response.raise_for_status = Mock()
+        mock_response.text = AsyncMock(return_value=html)
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=None)
+
+        mock_session.get = Mock(return_value=mock_response)
+
+        with patch("custom_components.idokep.api.async_timeout.timeout"):
+            result = await api_client._scrape_hourly_forecast("http://test.com")
+
+        forecast = result["hourly_forecast"]
+        assert len(forecast) == 4
+
+        # Check chronological order
+        dt0 = datetime.fromisoformat(forecast[0]["datetime"])
+        dt1 = datetime.fromisoformat(forecast[1]["datetime"])
+        dt2 = datetime.fromisoformat(forecast[2]["datetime"])
+        dt3 = datetime.fromisoformat(forecast[3]["datetime"])
+
+        assert dt0.hour == 22
+        assert dt1.hour == 23
+        assert dt2.hour == 0
+        assert dt3.hour == 1
+
+        # Verify day transition: 00:00 should be on next day after 23:00
+        assert dt2.date() > dt1.date()
+        assert (dt2 - dt1).total_seconds() == 3600
 
     @pytest.mark.asyncio
     async def test_scrape_daily_forecast_success(
