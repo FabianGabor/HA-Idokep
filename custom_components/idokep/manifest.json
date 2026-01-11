@@ -13,5 +13,5 @@
     "aiohttp",
     "beautifulsoup4"
   ],
-  "version": "2026.1.9"
+  "version": "2026.1.10"
 }
