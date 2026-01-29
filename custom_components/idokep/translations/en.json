@@ -2,7 +2,7 @@
     "config": {
         "step": {
             "user": {
-                "description": "If you need help with the configuration have a look here: https://github.com/FabianGabor/HA-Idokep",
+                "description": "Enter your Időkép credentials. For help, see the documentation on GitHub.",
                 "data": {
                     "username": "Username",
                     "password": "Password"
