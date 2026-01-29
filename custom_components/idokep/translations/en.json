@@ -2,7 +2,10 @@
     "config": {
         "step": {
             "user": {
-                "description": "If you need help with the configuration have a look here: https://github.com/FabianGabor/HA-Idokep",
+                "description": "If you need help with the configuration have a look here: {docs_url}",
+                "description_placeholders": {
+                    "docs_url": "https://github.com/FabianGabor/HA-Idokep"
+                },
                 "data": {
                     "username": "Username",
                     "password": "Password"
