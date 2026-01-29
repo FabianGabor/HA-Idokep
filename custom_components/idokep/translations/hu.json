@@ -2,10 +2,7 @@
     "config": {
         "step": {
             "user": {
-                "description": "Ha segítségre van szükséged a beállításhoz, nézd meg ezt: {docs_url}",
-                "description_placeholders": {
-                    "docs_url": "https://github.com/FabianGabor/HA-Idokep"
-                },
+                "description": "Add meg az Időkép bejelentkezési adataidat. Segítségért tekintsd meg a dokumentációt a GitHubon.",
                 "data": {
                     "username": "Felhasználónév",
                     "password": "Jelszó"
