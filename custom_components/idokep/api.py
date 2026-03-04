@@ -328,7 +328,8 @@ class CurrentWeatherParser(WeatherParser):
 
     def parse_short_forecast(self, soup: BeautifulSoup) -> str | None:
         """Extract short forecast text."""
-        # New structure (2026 redesign): scTextDescription inside shortCurrentWeatherText
+        # New structure (2026 redesign):
+        # scTextDescription inside shortCurrentWeatherText
         short_weather_div = soup.find("div", class_="shortCurrentWeatherText")
         if isinstance(short_weather_div, Tag):
             desc_div = short_weather_div.find("div", class_="scTextDescription")
@@ -686,7 +687,8 @@ class HourlyForecastParser(WeatherParser):
             return 0
 
     def extract_precipitation_amount(self, card: Tag) -> int:
-        """Extract precipitation amount from hourly card.
+        """
+        Extract precipitation amount from hourly card.
 
         The new frontend no longer encodes mm values as class names.
         We detect the presence of a non-N/A rainlevel div and estimate from
@@ -710,7 +712,7 @@ class HourlyForecastParser(WeatherParser):
                 # Each pixel is roughly proportional to mm; treat as integer mm
                 return int(height_match.group(1))
 
-        # Rainlevel div exists but height unknown – indicate some precipitation
+        # Rainlevel div exists but height unknown - indicate some precipitation
         return 1
 
     def parse_rainlevel_class(self, rainlevel_div: Tag) -> int:
