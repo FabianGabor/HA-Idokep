@@ -177,7 +177,8 @@ class TimeUtils:
     ) -> str | None:
         """Extract time from text and convert to ISO format."""
         if label in text:
-            match = re.search(rf"{label}\s*([0-9]{{1,2}}:[0-9]{{2}})", text)
+            # Handle both "Napkelte 6:18" and "Napkelte: 6:18" formats
+            match = re.search(rf"{label}[:\s]*([0-9]{{1,2}}:[0-9]{{2}})", text)
             if match:
                 time_str = match.group(1)
                 hour, minute = map(int, time_str.split(":"))
@@ -254,21 +255,22 @@ class CurrentWeatherParser(WeatherParser):
         result = {}
 
         # Temperature
-        temp_div = soup.find("div", class_="ik current-temperature")
+        temp_div = soup.find("div", class_="current-temperature")
         if isinstance(temp_div, Tag):
-            match = re.search(r"(-?\d+)[^\d]*C", temp_div.text)
+            # Match both ASCII 'C' and the Unicode DEGREE CELSIUS sign '\u2103'
+            match = re.search(r"(-?\d+)[^\d]*(?:C|\u2103)", temp_div.text)
             if match:
                 result["temperature"] = int(match.group(1))
 
-        # Weather condition
-        cond_div = soup.find("div", class_="ik current-weather")
+        # Weather condition (class has no 'ik' prefix since 2026 redesign)
+        cond_div = soup.find("div", class_="current-weather")
         if isinstance(cond_div, Tag):
             condition = cond_div.text.strip()
             result["condition"] = WeatherConditionMapper.map_condition(condition)
             result["condition_hu"] = condition
 
         # Weather title
-        title_div = soup.find("div", class_="ik current-weather-title")
+        title_div = soup.find("div", class_="current-weather-title")
         if isinstance(title_div, Tag):
             result["weather_title"] = title_div.text.strip()
 
@@ -326,14 +328,24 @@ class CurrentWeatherParser(WeatherParser):
 
     def parse_short_forecast(self, soup: BeautifulSoup) -> str | None:
         """Extract short forecast text."""
-        # First try the new structure with current-weather-short-desc class
+        # New structure (2026 redesign):
+        # scTextDescription inside shortCurrentWeatherText
+        short_weather_div = soup.find("div", class_="shortCurrentWeatherText")
+        if isinstance(short_weather_div, Tag):
+            desc_div = short_weather_div.find("div", class_="scTextDescription")
+            if isinstance(desc_div, Tag):
+                text = desc_div.get_text(strip=True)
+                if text:
+                    return text
+
+        # Fallback: old current-weather-short-desc class
         short_desc_div = soup.find("div", class_="current-weather-short-desc")
         if isinstance(short_desc_div, Tag):
             text = short_desc_div.get_text(strip=True)
             if text:
                 return text
 
-        # Fallback to old structure for backwards compatibility
+        # Last-resort fallback: look for non-image pt-2 divs
         for div in soup.find_all("div", class_="pt-2"):
             if not isinstance(div, Tag):
                 continue
@@ -558,7 +570,7 @@ class HourlyForecastParser(WeatherParser):
         # Start from tomorrow at midnight as the base date
         base_date = (now + datetime.timedelta(days=1)).date()
 
-        hourly_cards = soup.find_all("div", class_="ik new-hourly-forecast-card")
+        hourly_cards = soup.find_all("div", class_="ik wide-hourly-forecast-card")
 
         last_hour = None
         current_date = base_date
@@ -568,7 +580,7 @@ class HourlyForecastParser(WeatherParser):
                 continue
 
             # Extract hour first to detect day transitions
-            hour_div = card.find("div", class_="ik new-hourly-forecast-hour")
+            hour_div = card.find("div", class_="ik wide-hourly-forecast-hour")
             if hour_div and isinstance(hour_div, Tag):
                 hour_text = hour_div.text.strip()
                 hour_int = int(hour_text.split(":")[0])
@@ -595,7 +607,7 @@ class HourlyForecastParser(WeatherParser):
         forecast_date: datetime.date,
     ) -> dict[str, Any] | None:
         """Parse individual hourly forecast card."""
-        temp_div = card.find("div", class_="ik tempValue")
+        temp_div = card.find("div", class_="ik tempValue")  # class unchanged
 
         if not (
             hour_div
@@ -675,38 +687,37 @@ class HourlyForecastParser(WeatherParser):
             return 0
 
     def extract_precipitation_amount(self, card: Tag) -> int:
-        """Extract precipitation amount."""
-        rainlevel_pattern = re.compile(r"ik rainlevel-\d+")
-        rainlevel_divs = card.find_all("div", class_=rainlevel_pattern)
+        """
+        Extract precipitation amount from hourly card.
 
-        for rainlevel_div in rainlevel_divs:
-            if not isinstance(rainlevel_div, Tag):
-                continue
-
-            precipitation = self.parse_rainlevel_class(rainlevel_div)
-            if precipitation > 0:
-                return precipitation
-
-        return 0
-
-    def parse_rainlevel_class(self, rainlevel_div: Tag) -> int:
-        """Parse rainlevel class."""
-        class_attr = rainlevel_div.get("class")
-        if not class_attr:
+        The new frontend no longer encodes mm values as class names.
+        We detect the presence of a non-N/A rainlevel div and estimate from
+        the inline height style (each pixel roughly represents ~1 mm).
+        Returns 0 when no rain is indicated.
+        """
+        # rainlevel-na means no precipitation
+        if card.find("div", class_="ik rainlevel-na"):
             return 0
 
-        class_list = class_attr if isinstance(class_attr, list) else [class_attr]
+        # Look for a generic rainlevel div (new format uses style height)
+        rainlevel_div = card.find("div", class_="ik rainlevel")
+        if not (rainlevel_div and isinstance(rainlevel_div, Tag)):
+            return 0
 
-        for class_name in class_list:
-            if isinstance(class_name, str) and class_name.startswith("rainlevel-"):
-                try:
-                    precip_match = re.search(r"rainlevel-(\d+)", class_name)
-                    if precip_match:
-                        return int(precip_match.group(1))
-                except ValueError:
-                    continue
+        # Try to parse height from inline style (e.g. style="height: 5px;")
+        style = rainlevel_div.get("style", "")
+        if isinstance(style, str):
+            height_match = re.search(r"height:\s*(\d+)px", style)
+            if height_match:
+                # Each pixel is roughly proportional to mm; treat as integer mm
+                return int(height_match.group(1))
 
-        return 0
+        # Rainlevel div exists but height unknown - indicate some precipitation
+        return 1
+
+    def parse_rainlevel_class(self, rainlevel_div: Tag) -> int:
+        """Legacy helper kept for backwards compatibility; delegates to new logic."""
+        return self.extract_precipitation_amount(rainlevel_div)
 
 
 class DailyForecastParser(WeatherParser):
@@ -801,13 +812,21 @@ class DailyForecastParser(WeatherParser):
         if not isinstance(popover, str):
             return None
 
-        # Try detailed match first
-        match = re.search(r"popover-icon' src='[^']+'>([^<]+)<", popover)
-        if match:
-            return WeatherConditionMapper.map_condition(match.group(1).strip())
+        # The popover HTML contains the forecast icon img; extract condition from
+        # its alt attribute (works even when additional attributes like src exist):
+        # e.g. <img class='ik popover-icon' src='...forecastIcons/...' alt='zápor'>
+        alt_match = re.search(
+            r"forecastIcons/[^'\"]+['\"][^>]*alt=['\"]([^'\"]+)['\"]"
+            r"|alt=['\"]([^'\"]+)['\"][^>]*forecastIcons/",
+            popover,
+        )
+        if alt_match:
+            condition_text = (alt_match.group(1) or alt_match.group(2) or "").strip()
+            if condition_text:
+                return WeatherConditionMapper.map_condition(condition_text)
 
-        # Try simpler match as fallback
-        text_match = re.search(r"popover-icon' src='[^']+'>([^<]+)", popover)
+        # Fallback: grab text immediately after any forecast icon img closing >
+        text_match = re.search(r"forecastIcons/[^>]+>([^<]+)", popover)
         if text_match:
             return WeatherConditionMapper.map_condition(text_match.group(1).strip())
 
