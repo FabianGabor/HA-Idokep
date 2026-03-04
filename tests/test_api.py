@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import socket
+import zoneinfo
 from datetime import datetime
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -11,13 +13,18 @@ import pytest
 from bs4 import BeautifulSoup, Tag
 
 from custom_components.idokep.api import (
+    AlertData,
+    AlertParser,
     CurrentWeatherParser,
+    DailyForecastParser,
+    HourlyForecastParser,
     IdokepApiClient,
     IdokepApiClientAuthenticationError,
     IdokepApiClientCommunicationError,
     IdokepApiClientConnectivityError,
     IdokepApiClientError,
     _verify_response_or_raise,
+    create_idokep_client,
 )
 
 
@@ -1115,3 +1122,858 @@ class TestSunriseSunsetRegression:
 
         # Should return empty dict when no data found
         assert result == {}
+
+
+# ---------------------------------------------------------------------------
+# AlertParser tests
+# ---------------------------------------------------------------------------
+
+
+class TestAlertParserGeneral:
+    """Tests for AlertParser._parse_general_alert()."""
+
+    @pytest.fixture
+    def parser(self) -> AlertParser:
+        """Return a fresh AlertParser instance."""
+        return AlertParser()
+
+    def test_parse_returns_empty_alerts_when_no_topalertbar(
+        self, parser: AlertParser
+    ) -> None:
+        """parse() returns {'alerts': [], 'alerts_by_level': {...}} when no alert bar."""
+        soup = BeautifulSoup("<div>no alerts here</div>", "html.parser")
+        result = parser.parse(soup)
+        assert result["alerts"] == []
+        assert "alerts_by_level" in result
+
+    def test_parse_general_alert_yellow(self, parser: AlertParser) -> None:
+        """Yellow topalertbar produces a yellow-level alert."""
+        html = """
+        <div id="topalertbar" class="yellow">
+            <a>riasztás vihar miatt</a>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        result = parser.parse(soup)
+        assert len(result["alerts"]) == 1
+        alert = result["alerts"][0]
+        assert alert.level == "yellow"
+        assert alert.type == "storm"
+
+    def test_parse_general_alert_orange(self, parser: AlertParser) -> None:
+        """Orange topalertbar produces an orange-level alert."""
+        html = """
+        <div id="topalertbar" class="orange">
+            <a>riasztás szél miatt</a>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        result = parser.parse(soup)
+        assert len(result["alerts"]) == 1
+        assert result["alerts"][0].level == "orange"
+        assert result["alerts"][0].type == "wind"
+
+    def test_parse_general_alert_red(self, parser: AlertParser) -> None:
+        """Red topalertbar produces a red-level alert."""
+        html = """
+        <div id="topalertbar" class="red">
+            <a>riasztás hó miatt</a>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        result = parser.parse(soup)
+        assert len(result["alerts"]) == 1
+        assert result["alerts"][0].level == "red"
+        assert result["alerts"][0].type == "snow"
+
+    def test_parse_general_alert_no_level_class(self, parser: AlertParser) -> None:
+        """Alert bar without a recognised level class produces no alerts."""
+        html = """
+        <div id="topalertbar" class="info">
+            <a>some alert text</a>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        result = parser.parse(soup)
+        assert result["alerts"] == []
+
+    def test_parse_general_alert_no_link(self, parser: AlertParser) -> None:
+        """Alert bar without an anchor tag produces no alerts."""
+        html = """
+        <div id="topalertbar" class="yellow">
+            <span>riasztás</span>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        result = parser.parse(soup)
+        assert result["alerts"] == []
+
+    def test_alerts_by_level_structure(self, parser: AlertParser) -> None:
+        """alerts_by_level always has yellow/orange/red keys."""
+        soup = BeautifulSoup("", "html.parser")
+        result = parser.parse(soup)
+        for key in ("yellow", "orange", "red"):
+            assert key in result["alerts_by_level"]
+            assert isinstance(result["alerts_by_level"][key], list)
+
+
+class TestAlertParserHourly:
+    """Tests for AlertParser._parse_hourly_alerts()."""
+
+    @pytest.fixture
+    def parser(self) -> AlertParser:
+        """Return a fresh AlertParser instance."""
+        return AlertParser()
+
+    def test_hourly_alert_yellow_sarga(self, parser: AlertParser) -> None:
+        """'Sárga' in description → yellow level."""
+        html = """
+        <div class="genericHourlyAlert">
+            <a class="hover-over" data-bs-content="Sárga riasztás szél miatt">
+                <img class="forecast-alert-icon" src="/icons/wind.png" />
+            </a>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        result = parser._parse_hourly_alerts(soup)
+        assert len(result) == 1
+        assert result[0].level == "yellow"
+        assert result[0].type == "wind"
+
+    def test_hourly_alert_orange_narancs(self, parser: AlertParser) -> None:
+        """'Narancs' in description → orange level."""
+        html = """
+        <div class="genericHourlyAlert">
+            <a class="hover-over" data-bs-content="Narancs riasztás eső miatt">
+                <img class="forecast-alert-icon" src="/icons/rain.png" />
+            </a>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        result = parser._parse_hourly_alerts(soup)
+        assert len(result) == 1
+        assert result[0].level == "orange"
+        assert result[0].type == "rain"
+
+    def test_hourly_alert_red_piros(self, parser: AlertParser) -> None:
+        """'Piros' in description → red level."""
+        html = """
+        <div class="genericHourlyAlert">
+            <a class="hover-over" data-bs-content="Piros riasztás hóvihar miatt">
+                <img class="forecast-alert-icon" src="/icons/snow.png" />
+            </a>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        result = parser._parse_hourly_alerts(soup)
+        assert len(result) == 1
+        assert result[0].level == "red"
+
+    def test_hourly_alert_red_voros(self, parser: AlertParser) -> None:
+        """'Vörös' in description → red level."""
+        html = """
+        <div class="genericHourlyAlert">
+            <a class="hover-over" data-bs-content="Vörös riasztás vihar miatt">
+                <img class="forecast-alert-icon" src="https://cdn.example.com/alert.png" />
+            </a>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        result = parser._parse_hourly_alerts(soup)
+        assert len(result) == 1
+        assert result[0].level == "red"
+
+    def test_hourly_alert_no_recognised_level(self, parser: AlertParser) -> None:
+        """Description without a recognised level keyword → no alert."""
+        html = """
+        <div class="genericHourlyAlert">
+            <a class="hover-over" data-bs-content="Unknown alert text">
+                <img class="forecast-alert-icon" src="/icons/alert.png" />
+            </a>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        result = parser._parse_hourly_alerts(soup)
+        assert result == []
+
+    def test_hourly_alert_no_hover_over_link(self, parser: AlertParser) -> None:
+        """Container without a hover-over link → no alert."""
+        html = """
+        <div class="genericHourlyAlert">
+            <span>Sárga riasztás</span>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        result = parser._parse_hourly_alerts(soup)
+        assert result == []
+
+    def test_hourly_alert_empty_description(self, parser: AlertParser) -> None:
+        """Empty data-bs-content → no alert."""
+        html = """
+        <div class="genericHourlyAlert">
+            <a class="hover-over" data-bs-content="">
+                <img class="forecast-alert-icon" src="/icons/alert.png" />
+            </a>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        result = parser._parse_hourly_alerts(soup)
+        assert result == []
+
+    def test_hourly_alert_no_containers(self, parser: AlertParser) -> None:
+        """No genericHourlyAlert divs → empty list."""
+        soup = BeautifulSoup("<div>nothing</div>", "html.parser")
+        result = parser._parse_hourly_alerts(soup)
+        assert result == []
+
+    def test_hourly_alert_icon_url_leading_slash_prepends_base(
+        self, parser: AlertParser
+    ) -> None:
+        """Icon src starting with '/' gets the idokep base URL prepended."""
+        html = """
+        <div class="genericHourlyAlert">
+            <a class="hover-over" data-bs-content="Sárga riasztás szél miatt">
+                <img class="forecast-alert-icon" src="/icons/wind.png" />
+            </a>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        result = parser._parse_hourly_alerts(soup)
+        assert result[0].icon_url == "https://www.idokep.hu/icons/wind.png"
+
+    def test_hourly_alert_icon_url_full_url_unchanged(
+        self, parser: AlertParser
+    ) -> None:
+        """Icon src that is already a full URL is kept as-is."""
+        html = """
+        <div class="genericHourlyAlert">
+            <a class="hover-over" data-bs-content="Sárga riasztás szél miatt">
+                <img class="forecast-alert-icon" src="https://cdn.example.com/wind.png" />
+            </a>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        result = parser._parse_hourly_alerts(soup)
+        assert result[0].icon_url == "https://cdn.example.com/wind.png"
+
+    def test_hourly_alert_deduplication(self, parser: AlertParser) -> None:
+        """Identical alerts appearing twice are deduplicated."""
+        html = """
+        <div class="genericHourlyAlert">
+            <a class="hover-over" data-bs-content="Sárga riasztás szél miatt">
+                <img class="forecast-alert-icon" src="/icons/wind.png" />
+            </a>
+        </div>
+        <div class="genericHourlyAlert">
+            <a class="hover-over" data-bs-content="Sárga riasztás szél miatt">
+                <img class="forecast-alert-icon" src="/icons/wind.png" />
+            </a>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        result = parser._parse_hourly_alerts(soup)
+        assert len(result) == 1
+
+
+class TestAlertParserHelpers:
+    """Tests for _extract_alert_type and _organize_by_level."""
+
+    @pytest.fixture
+    def parser(self) -> AlertParser:
+        """Return a fresh AlertParser instance."""
+        return AlertParser()
+
+    @pytest.mark.parametrize(
+        ("description", "expected_type"),
+        [
+            ("ónos eső figyelmeztetés", "freezing_rain"),
+            ("ónosesőre vonatkozó riasztás", "freezing_rain"),
+            ("vihar miatt", "storm"),
+            ("zivatar várható", "thunderstorm"),
+            ("szél riasztás", "wind"),
+            ("hó riasztás", "snow"),
+            ("eső riasztás", "rain"),
+            ("köd figyelmeztetés", "fog"),
+            ("hőség riasztás", "heat"),
+            ("hideg riasztás", "cold"),
+            ("fagy riasztás", "frost"),
+        ],
+    )
+    def test_extract_alert_type_known(
+        self, parser: AlertParser, description: str, expected_type: str
+    ) -> None:
+        """Known Hungarian keywords map to the correct English type."""
+        assert parser._extract_alert_type(description) == expected_type
+
+    def test_extract_alert_type_unknown_falls_back_to_general(
+        self, parser: AlertParser
+    ) -> None:
+        """Unrecognised description falls back to 'general'."""
+        assert parser._extract_alert_type("unknown weather event") == "general"
+
+    def test_organize_by_level(self, parser: AlertParser) -> None:
+        """Alerts are correctly grouped by severity level."""
+        alerts = [
+            AlertData(level="yellow", type="wind", description="szél", icon_url=None),
+            AlertData(level="red", type="storm", description="vihar", icon_url=None),
+            AlertData(level="yellow", type="rain", description="eső", icon_url=None),
+        ]
+        result = parser._organize_by_level(alerts)
+        assert len(result["yellow"]) == 2
+        assert len(result["red"]) == 1
+        assert len(result["orange"]) == 0
+
+
+# ---------------------------------------------------------------------------
+# Short forecast new HTML structure (lines 335-339)
+# ---------------------------------------------------------------------------
+
+
+class TestShortForecastNewStructure:
+    """Test parse_short_forecast with 2026 shortCurrentWeatherText structure."""
+
+    @pytest.fixture
+    def parser(self) -> CurrentWeatherParser:
+        """Return a CurrentWeatherParser instance."""
+        return CurrentWeatherParser()
+
+    def test_new_structure_sc_text_description(
+        self, parser: CurrentWeatherParser
+    ) -> None:
+        """New-style scTextDescription inside shortCurrentWeatherText is the preferred path."""
+        html = """
+        <div class="shortCurrentWeatherText">
+            <div class="scTextDescription">Napos, kellemes idő</div>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        result = parser.parse_short_forecast(soup)
+        assert result == "Napos, kellemes idő"
+
+    def test_new_structure_takes_priority_over_old(
+        self, parser: CurrentWeatherParser
+    ) -> None:
+        """New structure takes priority when both structures are present."""
+        html = """
+        <div class="shortCurrentWeatherText">
+            <div class="scTextDescription">New description</div>
+        </div>
+        <div class="current-weather-short-desc">Old description</div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        result = parser.parse_short_forecast(soup)
+        assert result == "New description"
+
+
+# ---------------------------------------------------------------------------
+# HourlyForecastParser branch tests
+# ---------------------------------------------------------------------------
+
+
+class TestHourlyParserBranches:
+    """Tests for uncovered HourlyForecastParser branches."""
+
+    @pytest.fixture
+    def parser(self) -> HourlyForecastParser:
+        """Return a HourlyForecastParser instance."""
+        return HourlyForecastParser()
+
+    # ---- _parse_hourly_card ------------------------------------------------
+
+    def test_parse_hourly_card_hour_without_colon(
+        self, parser: HourlyForecastParser
+    ) -> None:
+        """Hour text without colon uses 0 for minutes (covers the else 0 branch)."""
+        html = """
+        <div class="ik wide-hourly-forecast-card">
+            <div class="ik wide-hourly-forecast-hour">14</div>
+            <div class="ik tempValue"><a>20</a></div>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        card = soup.find("div", class_="ik wide-hourly-forecast-card")
+        hour_div = card.find("div", class_="ik wide-hourly-forecast-hour")
+        result = parser._parse_hourly_card(card, hour_div, dt.date(2025, 6, 1))
+        assert result is not None
+        assert result["datetime"].startswith("2025-06-01T14:00")
+
+    def test_parse_hourly_card_invalid_hour_returns_none(
+        self, parser: HourlyForecastParser
+    ) -> None:
+        """Non-integer hour_text triggers ValueError and returns None."""
+        html = """
+        <div class="ik wide-hourly-forecast-card">
+            <div class="ik wide-hourly-forecast-hour">XX:00</div>
+            <div class="ik tempValue"><a>20</a></div>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        card = soup.find("div", class_="ik wide-hourly-forecast-card")
+        hour_div = card.find("div", class_="ik wide-hourly-forecast-hour")
+        result = parser._parse_hourly_card(card, hour_div, dt.date(2025, 6, 1))
+        assert result is None
+
+    # ---- extract_precipitation_probability ---------------------------------
+
+    def test_precipitation_probability_no_rain_chance_div(
+        self, parser: HourlyForecastParser
+    ) -> None:
+        """No hourly-rain-chance div → returns 0."""
+        html = "<div class='ik wide-hourly-forecast-card'></div>"
+        soup = BeautifulSoup(html, "html.parser")
+        card = soup.find("div")
+        assert parser.extract_precipitation_probability(card) == 0
+
+    def test_precipitation_probability_no_anchor(
+        self, parser: HourlyForecastParser
+    ) -> None:
+        """hourly-rain-chance div with no <a> → returns 0."""
+        html = """
+        <div class="ik wide-hourly-forecast-card">
+            <div class="ik hourly-rain-chance"><span>50%</span></div>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        card = soup.find("div", class_="ik wide-hourly-forecast-card")
+        assert parser.extract_precipitation_probability(card) == 0
+
+    def test_precipitation_probability_no_percent_sign(
+        self, parser: HourlyForecastParser
+    ) -> None:
+        """<a> text that doesn't end with '%' → returns 0."""
+        html = """
+        <div class="ik wide-hourly-forecast-card">
+            <div class="ik hourly-rain-chance"><a>50 mm</a></div>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        card = soup.find("div", class_="ik wide-hourly-forecast-card")
+        assert parser.extract_precipitation_probability(card) == 0
+
+    def test_precipitation_probability_value_error(
+        self, parser: HourlyForecastParser
+    ) -> None:
+        """<a> text ending with '%' but non-int prefix → returns 0."""
+        html = """
+        <div class="ik wide-hourly-forecast-card">
+            <div class="ik hourly-rain-chance"><a>abc%</a></div>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        card = soup.find("div", class_="ik wide-hourly-forecast-card")
+        assert parser.extract_precipitation_probability(card) == 0
+
+    # ---- extract_precipitation_amount -------------------------------------
+
+    def test_precipitation_amount_rainlevel_na_returns_zero(
+        self, parser: HourlyForecastParser
+    ) -> None:
+        """rainlevel-na → returns 0."""
+        html = """
+        <div class="ik wide-hourly-forecast-card">
+            <div class="ik rainlevel-na"></div>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        card = soup.find("div", class_="ik wide-hourly-forecast-card")
+        assert parser.extract_precipitation_amount(card) == 0
+
+    def test_precipitation_amount_no_rainlevel_returns_zero(
+        self, parser: HourlyForecastParser
+    ) -> None:
+        """No rainlevel div at all → returns 0."""
+        html = "<div class='ik wide-hourly-forecast-card'></div>"
+        soup = BeautifulSoup(html, "html.parser")
+        card = soup.find("div")
+        assert parser.extract_precipitation_amount(card) == 0
+
+    def test_precipitation_amount_rainlevel_no_height_returns_one(
+        self, parser: HourlyForecastParser
+    ) -> None:
+        """Rainlevel div without a height style returns 1 (some rain)."""
+        html = """
+        <div class="ik wide-hourly-forecast-card">
+            <div class="ik rainlevel"></div>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        card = soup.find("div", class_="ik wide-hourly-forecast-card")
+        assert parser.extract_precipitation_amount(card) == 1
+
+    def test_parse_rainlevel_class_wrapper(self, parser: HourlyForecastParser) -> None:
+        """
+        parse_rainlevel_class() delegates to extract_precipitation_amount().
+
+        The method passes its argument directly as the 'card', so the card must
+        contain a child div.ik.rainlevel for a non-zero result.
+        """
+        html = """
+        <div class="ik wide-hourly-forecast-card">
+            <div class="ik rainlevel" style="height: 7px;"></div>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        card = soup.find("div", class_="ik wide-hourly-forecast-card")
+        # parse_rainlevel_class delegates to extract_precipitation_amount(card)
+        result = parser.parse_rainlevel_class(card)
+        assert result == 7
+
+
+# ---------------------------------------------------------------------------
+# DailyForecastParser branch tests
+# ---------------------------------------------------------------------------
+
+
+class TestDailyParserBranches:
+    """Tests for uncovered DailyForecastParser branches."""
+
+    @pytest.fixture
+    def parser(self) -> DailyForecastParser:
+        """Return a DailyForecastParser instance."""
+        return DailyForecastParser()
+
+    # ---- extract_temperature -----------------------------------------------
+
+    def test_extract_temperature_no_match_returns_none(
+        self, parser: DailyForecastParser
+    ) -> None:
+        """Return None when the <a> tag contains no numeric text."""
+        # Build a parent col div so find works correctly
+        container = BeautifulSoup(
+            '<div class="col"><div class="ik max"><a>no numbers</a></div></div>',
+            "html.parser",
+        ).find("div", class_="col")
+        result = parser.extract_temperature(container, "ik max")
+        assert result is None
+
+    # ---- extract_condition -------------------------------------------------
+
+    def test_extract_condition_no_df_icon_alert_returns_none(
+        self, parser: DailyForecastParser
+    ) -> None:
+        """No dfIconAlert div → returns None."""
+        html = "<div class='col'></div>"
+        soup = BeautifulSoup(html, "html.parser")
+        col = soup.find("div")
+        assert parser.extract_condition(col) is None
+
+    def test_extract_condition_no_a_tag_returns_none(
+        self, parser: DailyForecastParser
+    ) -> None:
+        """Column with dfIconAlert but no anchor returns None."""
+        html = """
+        <div class="col">
+            <div class="ik dfIconAlert"><span>icon</span></div>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        col = soup.find("div", class_="col")
+        assert parser.extract_condition(col) is None
+
+    def test_extract_condition_non_string_popover_returns_none(
+        self, parser: DailyForecastParser
+    ) -> None:
+        """<a> without data-bs-content attribute → returns None."""
+        html = """
+        <div class="col">
+            <div class="ik dfIconAlert">
+                <a href="#">icon</a>
+            </div>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        col = soup.find("div", class_="col")
+        assert parser.extract_condition(col) is None
+
+    def test_extract_condition_fallback_text_match(
+        self, parser: DailyForecastParser
+    ) -> None:
+        """When alt regex fails but the text-after->  regex matches, use that."""
+        # Popover has forecastIcons path but instead of alt= uses just img text
+        html = """
+        <div class="col">
+            <div class="ik dfIconAlert">
+                <a data-bs-content="&lt;img src='forecastIcons/sunny.png'&gt;napos">icon</a>
+            </div>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        col = soup.find("div", class_="col")
+        result = parser.extract_condition(col)
+        # napos → sunny
+        assert result == "sunny"
+
+    def test_extract_condition_no_match_returns_none(
+        self, parser: DailyForecastParser
+    ) -> None:
+        """Popover with no forecastIcons reference → returns None."""
+        html = """
+        <div class="col">
+            <div class="ik dfIconAlert">
+                <a data-bs-content="no forecast icon here">icon</a>
+            </div>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        col = soup.find("div", class_="col")
+        assert parser.extract_condition(col) is None
+
+    # ---- extract_precipitation_probability (data-attribute path) -----------
+
+    def test_extract_precip_probability_data_attribute_csapadek(
+        self, parser: DailyForecastParser
+    ) -> None:
+        """data-bs-content containing 'csapadék' and a percent → extracts value."""
+        html = """
+        <div class="col">
+            <a data-bs-content="Csapadék valószínűsége: 40%">info</a>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        col = soup.find("div", class_="col")
+        result = parser.extract_precipitation_probability(col)
+        assert result == 40
+
+    def test_extract_precip_probability_data_attribute_precipitation(
+        self, parser: DailyForecastParser
+    ) -> None:
+        """data-bs-content containing 'precipitation' and a percent → extracts value."""
+        html = """
+        <div class="col">
+            <a data-bs-content="Precipitation probability: 65%">info</a>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        col = soup.find("div", class_="col")
+        result = parser.extract_precipitation_probability(col)
+        assert result == 65
+
+    def test_extract_precip_probability_data_attribute_returns_zero_when_none(
+        self, parser: DailyForecastParser
+    ) -> None:
+        """No matching data-bs-content → returns 0."""
+        html = """
+        <div class="col">
+            <a data-bs-content="Temperature: 25C">info</a>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        col = soup.find("div", class_="col")
+        result = parser.extract_precipitation_probability(col)
+        assert result == 0
+
+    def test_extract_precipitation_no_span_returns_zero(
+        self, parser: DailyForecastParser
+    ) -> None:
+        """No ik mm span → extract_precipitation returns 0."""
+        html = "<div class='col'></div>"
+        soup = BeautifulSoup(html, "html.parser")
+        col = soup.find("div")
+        assert parser.extract_precipitation(col) == 0
+
+    def test_extract_precip_probability_value_error_in_string_loop(
+        self, parser: DailyForecastParser
+    ) -> None:
+        r"""
+        Text matching \d+% search but non-integer before % triggers ValueError->0.
+
+        "50.5%" matches the \d+% regex via search (matches "0.5%" from index 3).
+        The full text ends with %, so int("50.5") raises ValueError -> continue.
+        """
+        html = """
+        <div class="col">
+            <span>50.5%</span>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        col = soup.find("div", class_="col")
+        result = parser.extract_precipitation_probability(col)
+        assert result == 0
+
+
+# ---------------------------------------------------------------------------
+# IdokepApiClient compatibility wrapper tests
+# ---------------------------------------------------------------------------
+
+
+class TestClientWrappers:
+    """Tests for IdokepApiClient compatibility wrapper methods."""
+
+    @pytest.fixture
+    def mock_session(self) -> Mock:
+        """Create a mock aiohttp session."""
+        return Mock(spec=aiohttp.ClientSession)
+
+    @pytest.fixture
+    def api_client(self, mock_session: Mock) -> IdokepApiClient:
+        """Create API client for testing."""
+        return IdokepApiClient(mock_session)
+
+    def test_extract_precipitation_probability_wrapper(
+        self, api_client: IdokepApiClient
+    ) -> None:
+        """_extract_precipitation_probability delegates to HourlyForecastParser."""
+        html = """
+        <div class="ik wide-hourly-forecast-card">
+            <div class="ik hourly-rain-chance"><a>30%</a></div>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        card = soup.find("div", class_="ik wide-hourly-forecast-card")
+        result = api_client._extract_precipitation_probability(card)
+        assert result == 30
+
+    def test_extract_precipitation_amount_wrapper(
+        self, api_client: IdokepApiClient
+    ) -> None:
+        """_extract_precipitation_amount delegates to HourlyForecastParser."""
+        html = """
+        <div class="ik wide-hourly-forecast-card">
+            <div class="ik rainlevel" style="height: 4px;"></div>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        card = soup.find("div", class_="ik wide-hourly-forecast-card")
+        result = api_client._extract_precipitation_amount(card)
+        assert result == 4
+
+    def test_parse_rainlevel_class_wrapper(self, api_client: IdokepApiClient) -> None:
+        """_parse_rainlevel_class delegates to HourlyForecastParser."""
+        html = """
+        <div class="ik wide-hourly-forecast-card">
+            <div class="ik rainlevel" style="height: 3px;"></div>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        card = soup.find("div", class_="ik wide-hourly-forecast-card")
+        result = api_client._parse_rainlevel_class(card)
+        assert result == 3
+
+    def test_extract_daily_precipitation_wrapper(
+        self, api_client: IdokepApiClient
+    ) -> None:
+        """_extract_daily_precipitation delegates to DailyForecastParser."""
+        html = """
+        <div class="col">
+            <span class="ik mm">5</span>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        col = soup.find("div", class_="col")
+        result = api_client._extract_daily_precipitation(col)
+        assert result == 5
+
+    def test_extract_daily_precipitation_probability_wrapper(
+        self, api_client: IdokepApiClient
+    ) -> None:
+        """_extract_daily_precipitation_probability delegates to DailyForecastParser."""
+        html = """
+        <div class="col">
+            <a data-bs-content="Csapadék: 70%">info</a>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        col = soup.find("div", class_="col")
+        result = api_client._extract_daily_precipitation_probability(col)
+        assert result == 70
+
+    def test_extract_time_from_text_wrapper(self, api_client: IdokepApiClient) -> None:
+        """_extract_time_from_text delegates to TimeUtils.extract_time_from_text."""
+        today = dt.date(2025, 6, 1)
+        local_tz = zoneinfo.ZoneInfo("Europe/Budapest")
+        dummy_div = BeautifulSoup("<div></div>", "html.parser").find("div")
+        result = api_client._extract_time_from_text(
+            "Napkelte", dummy_div, today, local_tz, "Napkelte 6:30"
+        )
+        assert result is not None
+        assert "06:30" in result
+
+
+# ---------------------------------------------------------------------------
+# create_idokep_client factory
+# ---------------------------------------------------------------------------
+
+
+class TestCreateIdokepClientFactory:
+    """Test the create_idokep_client factory function."""
+
+    def test_factory_returns_idokep_api_client(self) -> None:
+        """create_idokep_client returns an IdokepApiClient instance."""
+        mock_session = Mock(spec=aiohttp.ClientSession)
+        client = create_idokep_client(mock_session)
+        assert isinstance(client, IdokepApiClient)
+
+
+# ---------------------------------------------------------------------------
+# Scrape method exception handling
+# ---------------------------------------------------------------------------
+
+
+class TestScrapeExceptionHandling:
+    """Tests for the except clauses in _scrape_current/hourly/daily/alerts."""
+
+    @pytest.fixture
+    def mock_session(self) -> Mock:
+        """Create a mock aiohttp session."""
+        return Mock(spec=aiohttp.ClientSession)
+
+    @pytest.fixture
+    def api_client(self, mock_session: Mock) -> IdokepApiClient:
+        """Create API client for testing."""
+        return IdokepApiClient(mock_session)
+
+    @pytest.mark.asyncio
+    async def test_scrape_current_weather_exception_returns_empty_dict(
+        self, api_client: IdokepApiClient
+    ) -> None:
+        """_scrape_current_weather catches IdokepApiClientCommunicationError → {}."""
+        with patch.object(
+            api_client,
+            "_scrape_and_parse",
+            new_callable=AsyncMock,
+            side_effect=IdokepApiClientCommunicationError("err"),
+        ):
+            result = await api_client._scrape_current_weather("http://example.com")
+            assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_scrape_hourly_forecast_exception_returns_empty_dict(
+        self, api_client: IdokepApiClient
+    ) -> None:
+        """_scrape_hourly_forecast catches IdokepApiClientCommunicationError → {}."""
+        with patch.object(
+            api_client,
+            "_scrape_and_parse",
+            new_callable=AsyncMock,
+            side_effect=IdokepApiClientCommunicationError("err"),
+        ):
+            result = await api_client._scrape_hourly_forecast("http://example.com")
+            assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_scrape_daily_forecast_exception_returns_empty_dict(
+        self, api_client: IdokepApiClient
+    ) -> None:
+        """_scrape_daily_forecast catches IdokepApiClientCommunicationError → {}."""
+        with patch.object(
+            api_client,
+            "_scrape_and_parse",
+            new_callable=AsyncMock,
+            side_effect=IdokepApiClientCommunicationError("err"),
+        ):
+            result = await api_client._scrape_daily_forecast("http://example.com")
+            assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_scrape_alerts_exception_returns_empty_dict(
+        self, api_client: IdokepApiClient
+    ) -> None:
+        """_scrape_alerts catches IdokepApiClientCommunicationError → {}."""
+        with patch.object(
+            api_client,
+            "_scrape_and_parse",
+            new_callable=AsyncMock,
+            side_effect=IdokepApiClientCommunicationError("err"),
+        ):
+            result = await api_client._scrape_alerts("http://example.com")
+            assert result == {}
