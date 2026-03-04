@@ -363,14 +363,14 @@ class TestIdokepApiClientWeatherScraping:
             rain_chance = 10 + (hour * 2)
             rain_level = 3 if hour < 12 else 5
             day1_cards.append(f"""
-            <div class="ik new-hourly-forecast-card">
-                <div class="ik new-hourly-forecast-hour">{hour:02d}:00</div>
+            <div class="ik wide-hourly-forecast-card">
+                <div class="ik wide-hourly-forecast-hour">{hour:02d}:00</div>
                 <div class="ik tempValue"><a>{temp}</a></div>
                 <div class="forecast-icon-container">
                     <a data-bs-content="{condition}"></a>
                 </div>
                 <div class="ik hourly-rain-chance"><a>{rain_chance}%</a></div>
-                <div class="ik rainlevel-{rain_level}"></div>
+                <div class="ik rainlevel" style="height: {rain_level}px;"></div>
             </div>""")
 
         # Generate 12 hours for Day 2 (0-11)
@@ -381,14 +381,14 @@ class TestIdokepApiClientWeatherScraping:
             rain_chance = 50 + (hour * 3)
             rain_level = 7 if hour < 6 else 9
             day2_cards.append(f"""
-            <div class="ik new-hourly-forecast-card">
-                <div class="ik new-hourly-forecast-hour">{hour:02d}:00</div>
+            <div class="ik wide-hourly-forecast-card">
+                <div class="ik wide-hourly-forecast-hour">{hour:02d}:00</div>
                 <div class="ik tempValue"><a>{temp}</a></div>
                 <div class="forecast-icon-container">
                     <a data-bs-content="{condition}"></a>
                 </div>
                 <div class="ik hourly-rain-chance"><a>{rain_chance}%</a></div>
-                <div class="ik rainlevel-{rain_level}"></div>
+                <div class="ik rainlevel" style="height: {rain_level}px;"></div>
             </div>""")
 
         all_cards = "".join(day1_cards + day2_cards)
@@ -409,7 +409,7 @@ class TestIdokepApiClientWeatherScraping:
                     <div class="ik min"><a>15</a></div>
                 </div>
                 <div class="ik dfIconAlert">
-                    <a data-bs-content="popover-icon' src='icon.png'>Napos<"></a>
+                    <a data-bs-content="&lt;img class='ik popover-icon' src='/assets/forecastIcons/010.svg' alt='Napos'&gt;"></a>
                 </div>
                 <span class="ik mm">3 mm</span>
                 <span>15%</span>
@@ -420,7 +420,7 @@ class TestIdokepApiClientWeatherScraping:
                     <div class="ik min"><a>10</a></div>
                 </div>
                 <div class="ik dfIconAlert">
-                    <a data-bs-content="popover-icon' src='icon.png'>Eső<"></a>
+                    <a data-bs-content="&lt;img class='ik popover-icon' src='/assets/forecastIcons/082.svg' alt='Eső'&gt;"></a>
                 </div>
                 <span class="ik mm">8 mm</span>
                 <span>80%</span>
@@ -433,7 +433,7 @@ class TestIdokepApiClientWeatherScraping:
                     </div>
                 </div>
                 <div class="ik dfIconAlert">
-                    <a data-bs-content="popover-icon' src='icon.png'>Havazás<"></a>
+                    <a data-bs-content="&lt;img class='ik popover-icon' src='/assets/forecastIcons/060.svg' alt='Havazás'&gt;"></a>
                 </div>
                 <span class="ik mm">2 cm</span>
                 <span>5%</span>
@@ -446,7 +446,7 @@ class TestIdokepApiClientWeatherScraping:
                     </div>
                 </div>
                 <div class="ik dfIconAlert">
-                    <a data-bs-content="popover-icon' src='icon.png'>Hófúvás<"></a>
+                    <a data-bs-content="&lt;img class='ik popover-icon' src='/assets/forecastIcons/072.svg' alt='Hófúvás'&gt;"></a>
                 </div>
                 <span class="ik mm">9 cm</span>
                 <span>0%</span>
@@ -586,41 +586,41 @@ class TestIdokepApiClientWeatherScraping:
         # Create HTML with explicit day transition: 22:00, 23:00, 00:00, 01:00
         html = """
         <html>
-            <div class="ik new-hourly-forecast-card">
-                <div class="ik new-hourly-forecast-hour">22:00</div>
+            <div class="ik wide-hourly-forecast-card">
+                <div class="ik wide-hourly-forecast-hour">22:00</div>
                 <div class="ik tempValue"><a>5</a></div>
                 <div class="forecast-icon-container">
                     <a data-bs-content="Napos"></a>
                 </div>
                 <div class="ik hourly-rain-chance"><a>10%</a></div>
-                <div class="ik rainlevel-3"></div>
+                <div class="ik rainlevel" style="height: 3px;"></div>
             </div>
-            <div class="ik new-hourly-forecast-card">
-                <div class="ik new-hourly-forecast-hour">23:00</div>
+            <div class="ik wide-hourly-forecast-card">
+                <div class="ik wide-hourly-forecast-hour">23:00</div>
                 <div class="ik tempValue"><a>4</a></div>
                 <div class="forecast-icon-container">
                     <a data-bs-content="Napos"></a>
                 </div>
                 <div class="ik hourly-rain-chance"><a>15%</a></div>
-                <div class="ik rainlevel-3"></div>
+                <div class="ik rainlevel" style="height: 3px;"></div>
             </div>
-            <div class="ik new-hourly-forecast-card">
-                <div class="ik new-hourly-forecast-hour">00:00</div>
+            <div class="ik wide-hourly-forecast-card">
+                <div class="ik wide-hourly-forecast-hour">00:00</div>
                 <div class="ik tempValue"><a>3</a></div>
                 <div class="forecast-icon-container">
                     <a data-bs-content="Borult"></a>
                 </div>
                 <div class="ik hourly-rain-chance"><a>20%</a></div>
-                <div class="ik rainlevel-5"></div>
+                <div class="ik rainlevel" style="height: 5px;"></div>
             </div>
-            <div class="ik new-hourly-forecast-card">
-                <div class="ik new-hourly-forecast-hour">01:00</div>
+            <div class="ik wide-hourly-forecast-card">
+                <div class="ik wide-hourly-forecast-hour">01:00</div>
                 <div class="ik tempValue"><a>2</a></div>
                 <div class="forecast-icon-container">
                     <a data-bs-content="Borult"></a>
                 </div>
                 <div class="ik hourly-rain-chance"><a>25%</a></div>
-                <div class="ik rainlevel-5"></div>
+                <div class="ik rainlevel" style="height: 5px;"></div>
             </div>
         </html>
         """
@@ -905,7 +905,7 @@ class TestIdokepApiClientWeatherScraping:
         html = """
         <div class="card">
             <div class="ik hourly-rain-chance"><a>25%</a></div>
-            <div class="ik rainlevel-3"></div>
+            <div class="ik rainlevel" style="height: 3px;"></div>
         </div>
         """
         soup = BeautifulSoup(html, "html.parser")
@@ -940,7 +940,7 @@ class TestIdokepApiClientWeatherScraping:
         html = """
         <div class="col">
             <div class="ik dfIconAlert">
-                <a data-bs-content="popover-icon' src='icon.png'>Eső viharos széllel<">
+                <a data-bs-content="&lt;img class='ik popover-icon' src='/assets/forecastIcons/082.svg' alt='Eső viharos széllel'&gt;">
                 </a>
             </div>
         </div>
@@ -960,7 +960,7 @@ class TestIdokepApiClientWeatherScraping:
         html = """
         <div class="col">
             <div class="ik dfIconAlert">
-                <a data-bs-content="popover-icon' src='icon.png'>Napos">
+                <a data-bs-content="&lt;img class='ik popover-icon' src='/assets/forecastIcons/010.svg' alt='Napos'&gt;">
                 </a>
             </div>
         </div>
