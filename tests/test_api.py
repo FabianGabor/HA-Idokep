@@ -1140,7 +1140,7 @@ class TestAlertParserGeneral:
     def test_parse_returns_empty_alerts_when_no_topalertbar(
         self, parser: AlertParser
     ) -> None:
-        """parse() returns {'alerts': [], 'alerts_by_level': {...}} when no alert bar."""
+        """parse() returns empty alerts dict when there is no alert bar."""
         soup = BeautifulSoup("<div>no alerts here</div>", "html.parser")
         result = parser.parse(soup)
         assert result["alerts"] == []
@@ -1440,7 +1440,7 @@ class TestShortForecastNewStructure:
     def test_new_structure_sc_text_description(
         self, parser: CurrentWeatherParser
     ) -> None:
-        """New-style scTextDescription inside shortCurrentWeatherText is the preferred path."""
+        """New-style scTextDescription inside shortCurrentWeatherText is preferred."""
         html = """
         <div class="shortCurrentWeatherText">
             <div class="scTextDescription">Napos, kellemes idő</div>
