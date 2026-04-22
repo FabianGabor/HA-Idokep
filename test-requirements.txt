@@ -5,7 +5,7 @@ pytest-cov>=4.0.0
 pytest-mock>=3.10.0
 
 # Code quality tools
-pylint>=3.0.0
+pylint>=4.0.5
 pylint-per-file-ignores>=1.4.0
 
 # Nox for test automation
