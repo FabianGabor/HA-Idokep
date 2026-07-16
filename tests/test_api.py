@@ -13,11 +13,13 @@ import pytest
 from bs4 import BeautifulSoup, Tag
 
 from custom_components.idokep.api import (
+    _BROWSER_HEADERS,
     AlertData,
     AlertParser,
     CurrentWeatherParser,
     DailyForecastParser,
     HourlyForecastParser,
+    HttpClient,
     IdokepApiClient,
     IdokepApiClientAuthenticationError,
     IdokepApiClientCommunicationError,
@@ -100,6 +102,89 @@ class TestIdokepApiClientExceptions:
 
         with pytest.raises(aiohttp.ClientResponseError):
             _verify_response_or_raise(mock_response)
+
+
+class TestHttpClientBrowserHeaders:
+    """
+    Test that HttpClient sends browser-like headers to avoid 403 errors.
+
+    idokep.hu returns HTTP 403 Forbidden for requests that use Home
+    Assistant's default aiohttp User-Agent. These tests guard against a
+    regression back to unauthenticated/bare requests.
+    """
+
+    @pytest.fixture
+    def mock_session(self) -> Mock:
+        """Create a mock aiohttp session."""
+        return Mock(spec=aiohttp.ClientSession)
+
+    def _make_get_context_manager(self, response: Mock) -> Mock:
+        """Wrap a mock response in an async context manager."""
+        response.__aenter__ = AsyncMock(return_value=response)
+        response.__aexit__ = AsyncMock(return_value=None)
+        return response
+
+    @pytest.mark.asyncio
+    async def test_get_html_sends_browser_headers(self, mock_session: Mock) -> None:
+        """Test get_html() passes browser headers to avoid 403 from idokep.hu."""
+        mock_response = Mock()
+        mock_response.raise_for_status = Mock()
+        mock_response.text = AsyncMock(return_value="<html></html>")
+        self._make_get_context_manager(mock_response)
+        mock_session.get = Mock(return_value=mock_response)
+
+        http_client = HttpClient(mock_session)
+        result = await http_client.get_html("https://www.idokep.hu/idojaras/Test")
+
+        assert result == "<html></html>"
+        mock_session.get.assert_called_once_with(
+            "https://www.idokep.hu/idojaras/Test", headers=_BROWSER_HEADERS
+        )
+        # Explicitly guard the User-Agent that fixed the 403 issue.
+        assert "Mozilla" in _BROWSER_HEADERS["User-Agent"]
+
+    @pytest.mark.asyncio
+    async def test_get_html_403_raises_communication_error(
+        self, mock_session: Mock
+    ) -> None:
+        """Test get_html() surfaces a 403 (Forbidden) as a communication error."""
+        request_info = Mock()
+        history: tuple = ()
+        mock_session.get = Mock(
+            side_effect=aiohttp.ClientResponseError(
+                request_info=request_info,
+                history=history,
+                status=403,
+                message="Forbidden",
+            )
+        )
+
+        http_client = HttpClient(mock_session)
+
+        with pytest.raises(IdokepApiClientCommunicationError) as exc_info:
+            await http_client.get_html("https://www.idokep.hu/idojaras/Test")
+
+        assert "403" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_check_connectivity_sends_browser_headers(
+        self, mock_session: Mock
+    ) -> None:
+        """Test check_connectivity() also sends browser headers."""
+        mock_response = Mock()
+        self._make_get_context_manager(mock_response)
+        mock_session.get = Mock(return_value=mock_response)
+
+        http_client = HttpClient(mock_session)
+        result = await http_client.check_connectivity()
+
+        assert result is True
+        mock_session.get.assert_called_once_with(
+            "https://www.idokep.hu",
+            headers=_BROWSER_HEADERS,
+            ssl=False,
+            allow_redirects=False,
+        )
 
 
 class TestIdokepApiClientZoneInfoHandling:
@@ -276,8 +361,29 @@ class TestIdokepApiClient:
 
         assert result is True
         mock_session.get.assert_called_once_with(
-            "https://www.idokep.hu", ssl=False, allow_redirects=False
+            "https://www.idokep.hu",
+            headers=_BROWSER_HEADERS,
+            ssl=False,
+            allow_redirects=False,
         )
+
+    @pytest.mark.asyncio
+    async def test_check_connectivity_sends_browser_user_agent(
+        self, api_client: IdokepApiClient, mock_session: Mock
+    ) -> None:
+        """Test connectivity check sends a browser User-Agent to avoid 403s."""
+        mock_response = Mock()
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=None)
+        mock_session.get = Mock(return_value=mock_response)
+
+        with patch("custom_components.idokep.api.async_timeout.timeout"):
+            await api_client.check_connectivity()
+
+        _, kwargs = mock_session.get.call_args
+        assert "User-Agent" in kwargs["headers"]
+        assert "Mozilla" in kwargs["headers"]["User-Agent"]
+        assert "HomeAssistant" not in kwargs["headers"]["User-Agent"]
 
     @pytest.mark.asyncio
     async def test_check_connectivity_failure(
