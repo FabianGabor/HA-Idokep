@@ -223,6 +223,13 @@ class HttpClient:
     async def get_html(self, url: str) -> str:
         """Get HTML content from URL with error handling."""
         try:
+            headers = {
+                "User-Agent": "Mozilla/5.0",
+                "Accept": "text/html,application/xhtml+xml",
+                "Accept-Language": "hu-HU,hu;q=0.9",
+                "Referer": "https://www.idokep.hu/"
+            }
+
             async with (
                 async_timeout.timeout(IdokepConfig.TIMEOUT),
                 self._session.get(url) as response,
