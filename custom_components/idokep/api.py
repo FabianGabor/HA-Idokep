@@ -232,8 +232,9 @@ class HttpClient:
 
             async with (
                 async_timeout.timeout(IdokepConfig.TIMEOUT),
-                self._session.get(url) as response,
+                self._session.get(url, headers=headers) as response,
             ):
+
                 response.raise_for_status()
                 return await response.text()
         except TimeoutError as exception:
