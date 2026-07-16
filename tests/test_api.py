@@ -13,6 +13,7 @@ import pytest
 from bs4 import BeautifulSoup, Tag
 
 from custom_components.idokep.api import (
+    _BROWSER_HEADERS,
     AlertData,
     AlertParser,
     CurrentWeatherParser,
@@ -24,7 +25,6 @@ from custom_components.idokep.api import (
     IdokepApiClientCommunicationError,
     IdokepApiClientConnectivityError,
     IdokepApiClientError,
-    _BROWSER_HEADERS,
     _verify_response_or_raise,
     create_idokep_client,
 )
@@ -105,7 +105,8 @@ class TestIdokepApiClientExceptions:
 
 
 class TestHttpClientBrowserHeaders:
-    """Test that HttpClient sends browser-like headers to avoid 403 errors.
+    """
+    Test that HttpClient sends browser-like headers to avoid 403 errors.
 
     idokep.hu returns HTTP 403 Forbidden for requests that use Home
     Assistant's default aiohttp User-Agent. These tests guard against a
