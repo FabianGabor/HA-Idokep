@@ -196,6 +196,18 @@ class TimeUtils:
 
 
 # HTTP client wrapper
+# Headers that mimic a real browser to avoid bot-detection 403s
+_BROWSER_HEADERS: dict[str, str] = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/126.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "hu-HU,hu;q=0.9,en-US;q=0.8,en;q=0.7",
+}
+
+
 class HttpClient:
     """HTTP client with error handling."""
 
@@ -213,7 +225,12 @@ class HttpClient:
         try:
             async with (
                 async_timeout.timeout(3),
-                self._session.get(f"https://{host}", ssl=False, allow_redirects=False),
+                self._session.get(
+                    f"https://{host}",
+                    headers=_BROWSER_HEADERS,
+                    ssl=False,
+                    allow_redirects=False,
+                ),
             ):
                 # We just need to check if we can connect, any response is fine
                 return True
@@ -225,7 +242,7 @@ class HttpClient:
         try:
             async with (
                 async_timeout.timeout(IdokepConfig.TIMEOUT),
-                self._session.get(url) as response,
+                self._session.get(url, headers=_BROWSER_HEADERS) as response,
             ):
                 response.raise_for_status()
                 return await response.text()
