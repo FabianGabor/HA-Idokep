@@ -135,6 +135,7 @@ class WeatherConditionMapper:
         "ködszitálás": "fog",
         "párás": "fog",
         "pára": "fog",
+        "porvihar": "exceptional",
         "erős eső": "pouring",
         "jégeső": "hail",
         "havazás": "snowy",
