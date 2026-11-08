@@ -740,6 +740,7 @@ class HourlyForecastParser(WeatherParser):
         return self.extract_precipitation_amount(rainlevel_div)
 
 
+
 class DailyForecastParser(WeatherParser):
     """Parser for daily forecast data."""
 
@@ -748,20 +749,99 @@ class DailyForecastParser(WeatherParser):
         result = {}
         daily_forecast = []
         daily_cols = soup.find_all("div", class_="ik dailyForecastCol")
-        today = datetime.datetime.now(tz=datetime.UTC).date()
+        today = datetime.datetime.now(
+            tz=TimeUtils.get_local_timezone()
+        ).date()
+        previous_date = None
 
         for i, col in enumerate(daily_cols):
             if not isinstance(col, Tag):
                 continue
 
-            forecast_date = today + datetime.timedelta(days=i)
-            forecast_item = self._parse_daily_column(col, forecast_date)
+            fallback_date = (
+                previous_date + datetime.timedelta(days=1)
+                if previous_date is not None
+                else today + datetime.timedelta(days=i)
+            )
+
+            forecast_date = self.extract_forecast_date(
+                col, fallback_date
+            )
+            forecast_item = self._parse_daily_column(
+                col, forecast_date
+            )
             daily_forecast.append(forecast_item)
+            previous_date = forecast_date
 
         if daily_forecast:
             result["daily_forecast"] = daily_forecast
 
         return result
+
+    @staticmethod
+    def extract_forecast_date(
+        col: Tag, fallback_date: datetime.date
+    ) -> datetime.date:
+        """Read the actual forecast date from the Idokep column."""
+        months = {
+            "január": 1,
+            "február": 2,
+            "március": 3,
+            "április": 4,
+            "május": 5,
+            "június": 6,
+            "július": 7,
+            "augusztus": 8,
+            "szeptember": 9,
+            "október": 10,
+            "november": 11,
+            "december": 12,
+        }
+
+        # The forecast icon contains the complete date.
+        # Example: title="Vasárnap<br>2026. november 8."
+        icon = col.select_one(".dfIconAlert a[title]")
+
+        if icon is not None:
+            title = icon.get("title")
+
+            if isinstance(title, str):
+                match = re.search(
+                    r"(\d{4})\.\s*([a-záéíóöőúüű]+)\s+(\d{1,2})\.",
+                    title.lower(),
+                )
+
+                if match:
+                    year, month_name, day = match.groups()
+                    month = months.get(month_name)
+
+                    if month is not None:
+                        try:
+                            return datetime.date(
+                                int(year), month, int(day)
+                            )
+                        except ValueError:
+                            pass
+
+        # Fallback: use the day number in the column header.
+        header_day = col.select_one(
+            ".dfColHeader .dfDayNum"
+        )
+
+        if header_day is not None:
+            day_text = header_day.get_text(strip=True)
+
+            if day_text.isdigit():
+                for offset in range(32):
+                    candidate = (
+                        fallback_date
+                        + datetime.timedelta(days=offset)
+                    )
+                    if candidate.day == int(day_text):
+                        return candidate
+
+        # Legacy fallback if the date cannot be extracted.
+        return fallback_date
 
     def _parse_daily_column(
         self, col: Tag, forecast_date: datetime.date
